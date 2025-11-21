@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -27,3 +27,12 @@ class InterestResponse(InterestBase):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedInterestResponse(BaseModel):
+    """페이지네이션된 관심사 목록 응답"""
+    items: List[InterestResponse]
+    total: int
+    page: int
+    size: int
+    total_pages: int

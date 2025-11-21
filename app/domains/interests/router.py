@@ -1,27 +1,23 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
+from math import ceil
 
 from app.core.database import get_db
-from app.domains.interests.schema import InterestCreate, InterestUpdate, InterestResponse
+from app.domains.interests.schema import (
+    InterestCreate, 
+    InterestUpdate, 
+    InterestResponse,
+    PaginatedInterestResponse
+)
 from app.domains.interests.service import InterestService, get_interest_service
 
 router = APIRouter(prefix="/interests", tags=["interests"])
 
 
-class PaginatedInterestResponse(BaseModel):
-    """페이지네이션이 포함된 관심사 목록 응답"""
-    items: List[InterestResponse]
-    total: int
-    skip: int
-    limit: int
-
-
 @router.get("/", response_model=PaginatedInterestResponse)
 async def get_interests(
-    skip: int = Query(0, ge=0, description="건너뛸 항목 수"),
-    limit: int = Query(100, ge=1, le=100, description="조회할 항목 수"),
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
+    size: int = Query(20, ge=1, le=100, description="페이지 크기 (최대 100)"),
     active_only: bool = Query(True, description="활성화된 관심사만 조회"),
     db: Session = Depends(get_db),
     service: InterestService = Depends(get_interest_service)
@@ -29,18 +25,21 @@ async def get_interests(
     """
     관심사 목록 조회 (페이지네이션)
     
-    - **skip**: 건너뛸 항목 수
-    - **limit**: 조회할 항목 수 (최대 100)
+    - **page**: 페이지 번호 (1부터 시작)
+    - **size**: 페이지 크기 (최대 100)
     - **active_only**: 활성화된 관심사만 조회 여부
     """
-    interests = await service.get_interests(db, skip=skip, limit=limit, active_only=active_only)
+    skip = (page - 1) * size
+    interests = await service.get_interests(db, skip=skip, limit=size, active_only=active_only)
     total = await service.get_interest_count(db, active_only=active_only)
+    total_pages = ceil(total / size) if total > 0 else 1
     
     return PaginatedInterestResponse(
         items=interests,
         total=total,
-        skip=skip,
-        limit=limit
+        page=page,
+        size=size,
+        total_pages=total_pages
     )
 
 
