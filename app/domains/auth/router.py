@@ -17,6 +17,8 @@ from app.domains.auth.schema import (
     VerifyCodeRequest,
     VerifyCodeResponse
 )
+from app.domains.users.schema import SignupRequest, SignupResponse
+from app.domains.users.service import get_user_service, UserService
 from app.domains.auth.service import (
     get_auth_service,
     get_allowed_email_domain_service,
@@ -210,10 +212,6 @@ async def delete_allowed_domain(
         )
 
 
-# ============================================
-# Email Verification
-# ============================================
-
 @router.post("/send-verification-code", response_model=SendVerificationCodeResponse)
 async def send_verification_code(
     request: SendVerificationCodeRequest,
@@ -317,4 +315,66 @@ async def verify_code(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e.detail)
+        )
+
+
+@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
+async def signup(
+    request: SignupRequest,
+    db: Session = Depends(get_db),
+    verification_service: EmailVerificationService = Depends(get_email_verification_service),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    회원가입
+    
+    1. 이메일 인증 완료 여부 확인
+    2. 사용자 생성 (비밀번호 해싱, 프로필 정보 저장)
+    3. 관심사 연결 (선택적)
+    
+    - **email**: 이메일 주소 (인증 완료된 이메일이어야 함)
+    - **password**: 비밀번호 (최소 8자)
+    - **nickname**: 닉네임 (2-50자)
+    - **grade**: 학년 (1-6)
+    - **major_id**: 전공 ID
+    - **interest_ids**: 관심사 ID 목록 (선택적)
+    - **privacy_policy_agreed**: 개인정보 처리방침 동의 (필수)
+    
+    Returns:
+        생성된 사용자 정보
+        
+    Raises:
+        - 400: 이메일 미인증
+        - 400: 이메일 중복
+        - 400: 개인정보 미동의
+        - 404: 존재하지 않는 major_id
+    """
+    try:
+        # 1. 이메일 인증 완료 여부 확인
+        if not verification_service.is_email_verified(db, request.email):
+            raise BadRequestException("이메일 인증이 완료되지 않았습니다. 먼저 이메일 인증을 진행해주세요.")
+        
+        # 2. 사용자 생성
+        user = user_service.signup(db, request)
+        
+        # 3. 응답 반환
+        return SignupResponse(
+            id=user.id,
+            email=user.email,
+            nickname=user.nickname,
+            message="회원가입이 완료되었습니다."
+        )
+        
+    except BadRequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.detail)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 예상치 못한 에러 (DB 제약조건 위반 등)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"회원가입 처리 중 오류가 발생했습니다: {str(e)}"
         )
