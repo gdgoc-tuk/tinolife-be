@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: tinolife-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tinolife}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinolife123}
+      POSTGRES_DB: ${POSTGRES_DB:-tinolife}
+      TZ: Asia/Seoul
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tinolife-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tinolife}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tinolife-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tinolife}:${POSTGRES_PASSWORD:-tinolife123}@db:5432/${POSTGRES_DB:-tinolife}
+      ASYNC_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tinolife}:${POSTGRES_PASSWORD:-tinolife123}@db:5432/${POSTGRES_DB:-tinolife}
+      DEBUG: ${DEBUG:-True}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here-change-in-production}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - /app/.venv
+    networks:
+      - tinolife-network
+    depends_on:
+      db:
+        condition: service_healthy
+    command: pipenv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  tinolife-network:
+    driver: bridge

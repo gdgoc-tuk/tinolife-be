@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Union
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -16,7 +17,16 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # CORS 설정
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_ORIGINS: Union[List[str], str] = ["*"]
+    
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """CORS origins를 문자열 또는 리스트로 파싱"""
+        if isinstance(v, str):
+            # 쉼표로 구분된 문자열을 리스트로 변환
+            return [origin.strip() for origin in v.split(",")]
+        return v
     
     # 데이터베이스 설정
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/tinolife"
@@ -36,6 +46,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",  # .env에 정의되지 않은 필드 무시
     )
 
 

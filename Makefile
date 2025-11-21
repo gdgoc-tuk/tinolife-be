@@ -1,11 +1,19 @@
-.PHONY: help install dev run test clean lint format
+.PHONY: help install dev run test clean lint format docker-up docker-down docker-restart docker-logs
 
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "Development:"
+	@echo "Docker:"
+	@echo "  make dev             - Start development environment with Docker Compose"
+	@echo "  make docker-up       - Start Docker containers"
+	@echo "  make docker-down     - Stop Docker containers"
+	@echo "  make docker-restart  - Restart Docker containers"
+	@echo "  make docker-logs     - View Docker logs"
+	@echo "  make docker-clean    - Stop and remove all containers, volumes"
+	@echo ""
+	@echo "Development (Local):"
 	@echo "  make install         - Install dependencies"
-	@echo "  make dev             - Run development server with auto-reload"
+	@echo "  make dev-local       - Run development server locally (without Docker)"
 	@echo "  make run             - Run production server"
 	@echo "  make shell           - Open pipenv shell"
 	@echo ""
@@ -24,6 +32,49 @@ help:
 	@echo "  make format          - Format code with black"
 	@echo "  make clean           - Remove cache files"
 
+# Docker commands
+dev:
+	@echo "Starting development environment with Docker Compose..."
+	@if [ ! -f .env ]; then \
+		echo "Creating .env file from .env.example..."; \
+		cp .env.example .env; \
+	fi
+	@docker-compose up --build -d
+	@echo ""
+	@echo "✅ Development environment is running!"
+	@echo ""
+	@echo "📝 Services:"
+	@echo "   - API: http://localhost:8000"
+	@echo "   - Database: localhost:5432"
+	@echo ""
+	@echo "📊 Useful commands:"
+	@echo "   - View logs: make docker-logs"
+	@echo "   - Stop: make docker-down"
+	@echo "   - Restart: make docker-restart"
+	@echo ""
+
+docker-up:
+	@echo "Starting Docker containers..."
+	docker-compose up -d
+
+docker-down:
+	@echo "Stopping Docker containers..."
+	docker-compose down
+
+docker-restart:
+	@echo "Restarting Docker containers..."
+	docker-compose restart
+
+docker-logs:
+	@echo "Viewing Docker logs..."
+	docker-compose logs -f
+
+docker-clean:
+	@echo "Stopping and removing all containers, networks, and volumes..."
+	docker-compose down -v --remove-orphans
+	docker system prune -f
+
+# Local development commands
 install:
 	@echo "Installing dependencies..."
 	pipenv install --dev
@@ -32,8 +83,8 @@ sync:
 	@echo "Syncing dependencies..."
 	pipenv sync --dev
 
-dev:
-	@echo "Starting development server..."
+dev-local:
+	@echo "Starting development server locally..."
 	pipenv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 run:
