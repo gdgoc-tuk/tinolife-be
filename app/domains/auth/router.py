@@ -29,6 +29,7 @@ from app.domains.auth.service import (
 )
 from app.common.email import get_email_service, EmailService
 from app.common.exceptions import BadRequestException
+from app.common.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer()
@@ -37,6 +38,7 @@ security = HTTPBearer()
 @router.post("/login", response_model=LoginResponse)
 async def login(
     login_data: LoginRequest,
+    db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """
@@ -47,12 +49,15 @@ async def login(
     
     Returns:
         액세스 토큰과 사용자 정보
+        
+    Raises:
+        - 401: 이메일 또는 비밀번호 불일치
     """
-    result = await auth_service.authenticate_user(login_data)
+    result = auth_service.authenticate_user(db, login_data)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="이메일 또는 비밀번호가 일치하지 않습니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return result
@@ -70,29 +75,34 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 @router.get("/me")
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    auth_service: AuthService = Depends(get_auth_service)
+async def get_current_user_info(
+    current_user = Depends(get_current_user)
 ):
     """
     현재 인증된 사용자 정보 조회
     
     Authorization 헤더에 Bearer 토큰이 필요합니다.
+    
+    Returns:
+        현재 로그인한 사용자의 정보
+        
+    Raises:
+        - 401: 유효하지 않은 토큰
+        - 403: 비활성화된 계정
     """
-    token = credentials.credentials
-    user = await auth_service.get_current_user(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+    from app.domains.users.schema import UserResponse
+    
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        nickname=current_user.nickname,
+        grade=current_user.grade,
+        major_id=current_user.major_id,
+        is_active=current_user.is_active,
+        is_email_verified=current_user.is_email_verified,
+        created_at=current_user.created_at
+    )
 
-
-# ============================================
-# Allowed Email Domain Management
-# ============================================
 
 @router.post("/check-domain", response_model=DomainCheckResponse)
 async def check_email_domain(
@@ -335,7 +345,7 @@ async def signup(
     - **email**: 이메일 주소 (인증 완료된 이메일이어야 함)
     - **password**: 비밀번호 (최소 8자)
     - **nickname**: 닉네임 (2-50자)
-    - **grade**: 학년 (1-6)
+    - **grade**: 학년 (1-4)
     - **major_id**: 전공 ID
     - **interest_ids**: 관심사 ID 목록 (선택적)
     - **privacy_policy_agreed**: 개인정보 처리방침 동의 (필수)
