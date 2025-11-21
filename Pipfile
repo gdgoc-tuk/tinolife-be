@@ -9,6 +9,10 @@ uvicorn = {extras = ["standard"], version = "*"}
 python-dotenv = "*"
 pydantic = "*"
 pydantic-settings = "*"
+sqlalchemy = "*"
+alembic = "*"
+psycopg2-binary = "*"
+asyncpg = "*"
 
 [dev-packages]
 pytest = "*"

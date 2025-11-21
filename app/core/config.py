@@ -18,8 +18,14 @@ class Settings(BaseSettings):
     # CORS 설정
     ALLOWED_ORIGINS: List[str] = ["*"]
     
-    # 데이터베이스 설정 (추후 사용)
-    DATABASE_URL: str = ""
+    # 데이터베이스 설정
+    DATABASE_URL: str = "postgresql://user:password@localhost:5432/tinolife"
+    ASYNC_DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/tinolife"
+    
+    @property
+    def sync_database_url(self) -> str:
+        """Alembic용 동기 DB URL"""
+        return self.DATABASE_URL
     
     # JWT 설정 (추후 사용)
     SECRET_KEY: str = "your-secret-key-here"
