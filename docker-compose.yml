@@ -31,6 +31,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tinolife}:${POSTGRES_PASSWORD:-tinolife123}@db:5432/${POSTGRES_DB:-tinolife}
       ASYNC_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tinolife}:${POSTGRES_PASSWORD:-tinolife123}@db:5432/${POSTGRES_DB:-tinolife}
+      POSTGRES_USER: ${POSTGRES_USER:-tinolife}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinolife123}
+      POSTGRES_DB: ${POSTGRES_DB:-tinolife}
       DEBUG: ${DEBUG:-True}
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-here-change-in-production}
     ports:

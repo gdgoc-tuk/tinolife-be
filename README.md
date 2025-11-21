@@ -5,6 +5,10 @@ FastAPI 기반의 TinoLife 백엔드 API 서버입니다.
 ## 기술 스택
 
 - **FastAPI**: 모던하고 빠른 Python 웹 프레임워크
+- **SQLAlchemy**: ORM (동기/비동기 지원)
+- **Alembic**: 데이터베이스 마이그레이션
+- **PostgreSQL**: 메인 데이터베이스
+- **Docker & Docker Compose**: 컨테이너화된 개발 환경
 - **Pipenv**: Python 패키지 관리 도구
 - **Uvicorn**: ASGI 서버
 - **Pydantic**: 데이터 검증 및 설정 관리
@@ -57,13 +61,9 @@ tinolife-be/
 
 ## 설치 및 실행
 
-### 1. 의존성 설치
+### Docker를 사용한 실행 (권장)
 
-```bash
-make install
-```
-
-### 2. 환경 변수 설정
+#### 1. 환경 변수 설정
 
 `.env.example` 파일을 `.env`로 복사하고 필요한 값을 설정합니다:
 
@@ -71,32 +71,129 @@ make install
 cp .env.example .env
 ```
 
-### 3. 개발 서버 실행
+#### 2. 개발 환경 시작
 
 ```bash
 make dev
 ```
 
+이 명령은 다음 작업을 자동으로 수행합니다:
+- Docker 컨테이너 빌드 및 시작
+- PostgreSQL 데이터베이스 초기화
+- **Alembic 마이그레이션 자동 실행** 🔄
+- FastAPI 애플리케이션 시작
+
 서버가 실행되면 다음 URL에서 확인할 수 있습니다:
 
-- API: http://localhost:8000
-- Swagger 문서: http://localhost:8000/docs
-- ReDoc 문서: http://localhost:8000/redoc
+- API: <http://localhost:8000>
+- Swagger 문서: <http://localhost:8000/docs>
+- ReDoc 문서: <http://localhost:8000/redoc>
+
+#### 3. Docker 관련 유용한 명령어
+
+```bash
+# 로그 확인
+make docker-logs
+
+# 앱 로그만 확인
+docker compose logs -f app
+
+# 컨테이너 중지
+make docker-down
+
+# 컨테이너 재시작
+make docker-restart
+
+# 완전히 삭제 (볼륨 포함)
+docker compose down -v
+```
+
+### 로컬 환경에서 실행 (Docker 없이)
+
+#### 1. 의존성 설치
+
+```bash
+make install
+```
+
+#### 2. PostgreSQL 설치 및 실행
+
+로컬에 PostgreSQL을 설치하고 실행해야 합니다.
+
+#### 3. 환경 변수 설정
+
+`.env` 파일에서 데이터베이스 호스트를 `localhost`로 변경:
+
+```env
+DATABASE_URL=postgresql://tinolife:tinolife123@localhost:5432/tinolife
+ASYNC_DATABASE_URL=postgresql+asyncpg://tinolife:tinolife123@localhost:5432/tinolife
+```
+
+#### 4. 마이그레이션 실행
+
+```bash
+make migrate-up
+```
+
+#### 5. 개발 서버 실행
+
+```bash
+make dev-local
+```
 
 ## Makefile 명령어
 
+### Docker 명령어
+
 | 명령어 | 설명 |
 |--------|------|
-| `make help` | 사용 가능한 명령어 목록 표시 |
+| `make dev` | Docker Compose로 개발 환경 시작 (자동 마이그레이션 포함) |
+| `make docker-up` | Docker 컨테이너 시작 |
+| `make docker-down` | Docker 컨테이너 중지 |
+| `make docker-restart` | Docker 컨테이너 재시작 |
+| `make docker-logs` | Docker 로그 확인 |
+| `make docker-clean` | 컨테이너, 볼륨 완전 삭제 |
+
+### 데이터베이스 마이그레이션
+
+| 명령어 | 설명 |
+|--------|------|
+| `make migrate-create` | 새 마이그레이션 생성 (autogenerate) |
+| `make migrate-up` | 마이그레이션 적용 |
+| `make migrate-down` | 마이그레이션 롤백 (1단계) |
+| `make migrate-history` | 마이그레이션 히스토리 조회 |
+| `make migrate-current` | 현재 마이그레이션 버전 확인 |
+| `make db-reset` | 데이터베이스 리셋 (주의!) |
+
+**참고:** Docker 환경에서 마이그레이션 명령 실행 시:
+
+```bash
+docker compose exec app pipenv run alembic upgrade head
+```
+
+### 로컬 개발 명령어
+
+| 명령어 | 설명 |
+|--------|------|
 | `make install` | 의존성 설치 |
-| `make dev` | 개발 서버 실행 (자동 재시작) |
+| `make dev-local` | 로컬 개발 서버 실행 |
 | `make run` | 프로덕션 서버 실행 |
+| `make shell` | Pipenv 쉘 열기 |
+
+### 테스트 및 코드 품질
+
+| 명령어 | 설명 |
+|--------|------|
 | `make test` | 테스트 실행 |
 | `make test-cov` | 커버리지와 함께 테스트 실행 |
 | `make lint` | 코드 린트 실행 |
 | `make format` | 코드 포맷팅 (Black) |
 | `make clean` | 캐시 파일 정리 |
-| `make shell` | Pipenv 쉘 열기 |
+
+### 의존성 관리
+
+| 명령어 | 설명 |
+|--------|------|
 | `make update` | 의존성 업데이트 |
 | `make lock` | 의존성 잠금 |
 

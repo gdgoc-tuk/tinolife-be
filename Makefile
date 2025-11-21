@@ -34,21 +34,30 @@ help:
 
 # Docker commands
 dev:
-	@echo "Starting development environment with Docker Compose..."
+	@echo "🚀 Starting development environment with Docker Compose..."
 	@if [ ! -f .env ]; then \
 		echo "Creating .env file from .env.example..."; \
 		cp .env.example .env; \
 	fi
 	@docker-compose up --build -d
 	@echo ""
+	@echo "⏳ Waiting for containers to be ready..."
+	@sleep 3
+	@echo ""
+	@echo "📋 Checking migration status..."
+	@docker-compose logs app | grep -i "migration" || echo "   (Check logs with 'make docker-logs' for migration details)"
+	@echo ""
 	@echo "✅ Development environment is running!"
 	@echo ""
 	@echo "📝 Services:"
 	@echo "   - API: http://localhost:8000"
+	@echo "   - API Docs: http://localhost:8000/docs"
 	@echo "   - Database: localhost:5432"
 	@echo ""
 	@echo "📊 Useful commands:"
 	@echo "   - View logs: make docker-logs"
+	@echo "   - View app logs: docker-compose logs -f app"
+	@echo "   - Run migrations manually: docker-compose exec app pipenv run alembic upgrade head"
 	@echo "   - Stop: make docker-down"
 	@echo "   - Restart: make docker-restart"
 	@echo ""

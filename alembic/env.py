@@ -30,9 +30,9 @@ from app.core.database import Base
 
 # 모든 도메인의 모델 import (autogenerate가 감지할 수 있도록)
 from app.domains.users.model import User  # noqa
-from app.domains.auth.model import RefreshToken, LoginHistory  # noqa
-# 새 도메인 추가 시 여기에 import 추가
-# from app.domains.posts.model import Post  # noqa
+from app.domains.auth.model import RefreshToken, LoginHistory, EmailVerification, AllowedEmailDomain  # noqa
+from app.domains.majors.model import Major  # noqa
+from app.domains.interests.model import Interest, user_interests  # noqa
 
 target_metadata = Base.metadata
 

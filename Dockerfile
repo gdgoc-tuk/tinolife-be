@@ -25,8 +25,14 @@ RUN PIPENV_VENV_IN_PROJECT=1 pipenv install --system --deploy --python $(which p
 # 애플리케이션 코드 복사
 COPY . .
 
+# entrypoint.sh 스크립트에 실행 권한 부여
+RUN chmod +x /app/entrypoint.sh
+
 # 포트 노출
 EXPOSE 8000
 
-# 애플리케이션 실행
+# Entrypoint 설정
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# 애플리케이션 실행 명령
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
