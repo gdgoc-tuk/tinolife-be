@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.domains.users.schema import UserCreate, UserResponse, SignupRequest
 from app.domains.users.model import User
@@ -19,6 +20,26 @@ class UserService:
     def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
         """이메일로 사용자 조회"""
         return db.query(User).filter(User.email == email).first()
+    
+    def get_user_by_nickname(self, db: Session, nickname: str) -> Optional[User]:
+        """닉네임으로 사용자 조회 (대소문자 구분 없음)"""
+        return db.query(User).filter(
+            func.lower(User.nickname) == func.lower(nickname)
+        ).first()
+    
+    def check_nickname_availability(self, db: Session, nickname: str) -> bool:
+        """
+        닉네임 사용 가능 여부 확인
+        
+        Args:
+            db: 데이터베이스 세션
+            nickname: 확인할 닉네임
+            
+        Returns:
+            bool: 사용 가능하면 True, 이미 존재하면 False
+        """
+        existing_user = self.get_user_by_nickname(db, nickname)
+        return existing_user is None
 
     def get_users(self, db: Session, skip: int = 0, limit: int = 100) -> List[User]:
         """사용자 목록 조회"""
@@ -78,10 +99,14 @@ class UserService:
         if existing_user:
             raise BadRequestException("이미 가입된 이메일입니다.")
         
-        # 3. 비밀번호 해싱
+        # 3. 닉네임 중복 체크
+        if not self.check_nickname_availability(db, signup_data.nickname):
+            raise BadRequestException("이미 사용 중인 닉네임입니다.")
+        
+        # 4. 비밀번호 해싱
         hashed_password = hash_password(signup_data.password)
         
-        # 4. 사용자 생성 데이터 준비
+        # 5. 사용자 생성 데이터 준비
         user_create = UserCreate(
             email=signup_data.email,
             hashed_password=hashed_password,
@@ -91,10 +116,10 @@ class UserService:
             is_email_verified=True  # 이메일 인증 완료 상태로 가정
         )
         
-        # 5. 사용자 생성
+        # 6. 사용자 생성
         user = self.create_user(db, user_create)
         
-        # 6. 관심사 연결 (선택적)
+        # 7. 관심사 연결 (선택적)
         if signup_data.interest_ids:
             self.add_user_interests(db, user.id, signup_data.interest_ids)
         

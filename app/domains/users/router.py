@@ -2,13 +2,46 @@ from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import List
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.domains.users.schema import UserCreate, UserResponse, UserUpdate
+from app.domains.users.schema import (
+    UserCreate, UserResponse, UserUpdate,
+    NicknameCheckResponse
+)
 from app.domains.users.service import get_user_service, UserService
 from app.domains.interests.schema import UserInterestsRequest, UserInterestsResponse, InterestResponse
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.get("/check-nickname", response_model=NicknameCheckResponse)
+async def check_nickname(
+    nickname: str = Query(..., min_length=2, max_length=20, description="확인할 닉네임"),
+    db: Session = Depends(get_db),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    닉네임 중복 확인
+    
+    - **nickname**: 확인할 닉네임 (2-20자)
+    
+    Returns:
+        - available: 사용 가능 여부 (true/false)
+        - message: 결과 메시지
+    """
+    # 중복 체크
+    is_available = user_service.check_nickname_availability(db, nickname)
+    
+    if is_available:
+        return NicknameCheckResponse(
+            available=True,
+            message="사용 가능한 닉네임입니다."
+        )
+    else:
+        return NicknameCheckResponse(
+            available=False,
+            message="이미 사용 중인 닉네임입니다."
+        )
 
 
 @router.get("/", response_model=List[UserResponse])

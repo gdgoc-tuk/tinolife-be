@@ -65,3 +65,14 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class NicknameCheckRequest(BaseModel):
+    """닉네임 중복 체크 요청 스키마"""
+    nickname: str = Field(..., min_length=2, max_length=20, description="확인할 닉네임")
+
+
+class NicknameCheckResponse(BaseModel):
+    """닉네임 중복 체크 응답 스키마"""
+    available: bool = Field(..., description="사용 가능 여부")
+    message: str = Field(..., description="결과 메시지")
