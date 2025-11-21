@@ -26,6 +26,9 @@ class Interest(Base):
         nullable=False,
         comment="수정 일시"
     )
+    
+    # 관계
+    users = relationship("User", secondary="user_interests", back_populates="interests")
 
     def __repr__(self):
         return f"<Interest(id={self.id}, name={self.name})>"

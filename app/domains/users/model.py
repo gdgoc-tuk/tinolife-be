@@ -45,9 +45,9 @@ class User(Base):
         comment="수정 일시"
     )
 
-    # 관계 (나중에 필요시 활성화)
-    # major = relationship("Major", backref="users")
-    # interests = relationship("Interest", secondary="user_interests", backref="users")
+    # 관계
+    major = relationship("Major", back_populates="users")
+    interests = relationship("Interest", secondary="user_interests", back_populates="users")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, nickname={self.nickname})>"

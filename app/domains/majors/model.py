@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -26,6 +27,9 @@ class Major(Base):
         nullable=False,
         comment="수정 일시"
     )
+    
+    # 관계
+    users = relationship("User", back_populates="major")
 
     def __repr__(self):
         return f"<Major(id={self.id}, name={self.name})>"

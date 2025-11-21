@@ -29,6 +29,25 @@ class InterestResponse(InterestBase):
         from_attributes = True
 
 
+class UserInterestsRequest(BaseModel):
+    """사용자 관심사 업데이트 요청"""
+    interest_ids: List[int] = Field(..., description="관심사 ID 목록")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "interest_ids": [1, 2, 3]
+            }
+        }
+
+
+class UserInterestsResponse(BaseModel):
+    """사용자 관심사 응답"""
+    user_id: int
+    interests: List[InterestResponse]
+    message: str = "관심사가 업데이트되었습니다."
+
+
 class PaginatedInterestResponse(BaseModel):
     """페이지네이션된 관심사 목록 응답"""
     items: List[InterestResponse]

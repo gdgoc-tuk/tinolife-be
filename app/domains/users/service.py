@@ -140,6 +140,45 @@ class UserService:
                 db.execute(stmt)
         
         db.commit()
+    
+    def update_user_interests(
+        self, 
+        db: Session, 
+        user_id: int, 
+        interest_ids: List[int]
+    ) -> None:
+        """
+        사용자 관심사 업데이트 (기존 관심사 제거 후 새로 추가)
+        
+        Args:
+            db: 데이터베이스 세션
+            user_id: 사용자 ID
+            interest_ids: 새로운 관심사 ID 목록
+        """
+        user = self.get_user_by_id(db, user_id)
+        if not user:
+            raise NotFoundException("사용자를 찾을 수 없습니다.")
+        
+        # 관심사 존재 여부 확인
+        interests = db.query(Interest).filter(Interest.id.in_(interest_ids)).all()
+        
+        if len(interests) != len(interest_ids):
+            raise BadRequestException("존재하지 않는 관심사가 포함되어 있습니다.")
+        
+        # 1. 기존 관심사 모두 제거
+        db.execute(
+            user_interests.delete().where(user_interests.c.user_id == user_id)
+        )
+        
+        # 2. 새 관심사 추가
+        for interest_id in interest_ids:
+            stmt = user_interests.insert().values(
+                user_id=user_id,
+                interest_id=interest_id
+            )
+            db.execute(stmt)
+        
+        db.commit()
 
     def update_user(self, db: Session, user_id: int, user_data: dict) -> Optional[User]:
         """사용자 정보 업데이트"""

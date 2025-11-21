@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.domains.users.schema import UserCreate, UserResponse, UserUpdate
 from app.domains.users.service import get_user_service, UserService
+from app.domains.interests.schema import UserInterestsRequest, UserInterestsResponse, InterestResponse
+from app.common.dependencies import get_current_user
+from app.domains.users.model import User
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -108,4 +111,81 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+
+@router.get("/me/interests", response_model=List[InterestResponse])
+async def get_my_interests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    현재 사용자의 관심사 목록 조회
+    
+    Authorization 헤더에 Bearer 토큰이 필요합니다.
+    
+    Returns:
+        현재 사용자의 관심사 목록
+    """
+    # user.interests는 SQLAlchemy relationship으로 자동 로드됨
+    return [
+        InterestResponse(
+            id=interest.id,
+            name=interest.name,
+            is_active=interest.is_active,
+            created_at=interest.created_at
+        )
+        for interest in current_user.interests
+    ]
+
+
+@router.put("/me/interests", response_model=UserInterestsResponse)
+async def update_my_interests(
+    request: UserInterestsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    현재 사용자의 관심사 업데이트
+    
+    기존 관심사를 모두 제거하고 새로운 관심사로 대체합니다.
+    
+    Authorization 헤더에 Bearer 토큰이 필요합니다.
+    
+    - **interest_ids**: 관심사 ID 목록
+    
+    Returns:
+        업데이트된 관심사 목록
+        
+    Raises:
+        - 400: 존재하지 않는 관심사 ID
+    """
+    from app.common.exceptions import BadRequestException
+    
+    try:
+        # 기존 관심사 제거 및 새 관심사 추가
+        user_service.update_user_interests(db, current_user.id, request.interest_ids)
+        
+        # 업데이트된 사용자 정보 다시 조회
+        db.refresh(current_user)
+        
+        return UserInterestsResponse(
+            user_id=current_user.id,
+            interests=[
+                InterestResponse(
+                    id=interest.id,
+                    name=interest.name,
+                    is_active=interest.is_active,
+                    created_at=interest.created_at
+                )
+                for interest in current_user.interests
+            ],
+            message="관심사가 업데이트되었습니다."
+        )
+        
+    except BadRequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.detail)
         )
