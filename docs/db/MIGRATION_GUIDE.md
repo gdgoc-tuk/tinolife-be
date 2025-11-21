@@ -7,7 +7,7 @@
 
 ## 📁 구조
 
-```
+```bash
 tinolife-be/
 ├── alembic/                      # Alembic 설정 디렉토리
 │   ├── versions/                 # 마이그레이션 파일들
@@ -248,6 +248,7 @@ make migrate-create
 ### 문제: 마이그레이션 충돌
 
 **해결:**
+
 ```bash
 # 현재 상태 확인
 make migrate-current
@@ -262,6 +263,7 @@ make migrate-create
 ### 문제: 데이터베이스 연결 오류
 
 **해결:**
+
 ```bash
 # 1. .env 파일의 DATABASE_URL 확인
 # 2. PostgreSQL 실행 여부 확인

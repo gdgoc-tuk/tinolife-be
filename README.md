@@ -14,7 +14,7 @@ FastAPI 기반의 TinoLife 백엔드 API 서버입니다.
 
 도메인 중심 설계(Domain-Driven Design)를 따르는 구조입니다:
 
-```
+```bash
 tinolife-be/
 ├── app/
 │   ├── __init__.py
@@ -78,6 +78,7 @@ make dev
 ```
 
 서버가 실행되면 다음 URL에서 확인할 수 있습니다:
+
 - API: http://localhost:8000
 - Swagger 문서: http://localhost:8000/docs
 - ReDoc 문서: http://localhost:8000/redoc
@@ -107,11 +108,13 @@ make dev
 - 린팅은 [Flake8](https://flake8.pycqa.org/)과 [MyPy](http://mypy-lang.org/)를 사용합니다
 
 코드 포맷팅:
+
 ```bash
 make format
 ```
 
 린트 확인:
+
 ```bash
 make lint
 ```
@@ -131,10 +134,12 @@ make test-cov
 ### API 엔드포인트
 
 #### 기본 엔드포인트
+
 - `GET /`: 루트 엔드포인트
 - `GET /health`: 헬스 체크
 
 #### 사용자 관리 (`/api/v1/users`)
+
 - `GET /api/v1/users`: 사용자 목록 조회
 - `GET /api/v1/users/{user_id}`: 특정 사용자 조회
 - `POST /api/v1/users`: 새 사용자 생성
@@ -142,6 +147,7 @@ make test-cov
 - `DELETE /api/v1/users/{user_id}`: 사용자 삭제
 
 #### 인증 (`/api/v1/auth`)
+
 - `POST /api/v1/auth/login`: 로그인
 - `POST /api/v1/auth/logout`: 로그아웃
 - `GET /api/v1/auth/me`: 현재 사용자 정보
@@ -160,6 +166,7 @@ make test-cov
    - `schema.py`: Pydantic 모델
    - `model.py`: 데이터베이스 모델 (선택)
 3. `app/main.py`에 라우터 등록:
+
    ```python
    from app.domains.your_domain.router import router as your_router
    app.include_router(your_router, prefix="/api/v1")
@@ -172,4 +179,3 @@ make test-cov
 ## 라이선스
 
 TBD
-
