@@ -73,3 +73,43 @@ class TokenData(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """토큰 갱신 요청 스키마"""
     refresh_token: str
+
+
+class SendVerificationCodeRequest(BaseModel):
+    """인증 코드 전송 요청 스키마"""
+    email: EmailStr = Field(..., description="인증할 이메일 주소")
+
+
+class SendVerificationCodeResponse(BaseModel):
+    """인증 코드 전송 응답 스키마"""
+    success: bool
+    message: str
+    expires_in_minutes: int = Field(..., description="만료 시간 (분)")
+    resend_count: int = Field(0, description="재전송 횟수")
+    max_resend_count: int = Field(3, description="최대 재전송 횟수")
+
+
+class VerifyCodeRequest(BaseModel):
+    """인증 코드 검증 요청 스키마"""
+    email: EmailStr = Field(..., description="인증할 이메일 주소")
+    code: str = Field(..., min_length=6, max_length=6, description="6자리 인증 코드")
+
+
+class VerifyCodeResponse(BaseModel):
+    """인증 코드 검증 응답 스키마"""
+    success: bool
+    message: str
+    verified: bool = Field(..., description="인증 성공 여부")
+
+
+class VerificationStatusResponse(BaseModel):
+    """인증 상태 조회 응답 스키마"""
+    email: EmailStr
+    is_verified: bool
+    expires_at: Optional[datetime] = None
+    attempt_count: int = 0
+    resend_count: int = 0
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
