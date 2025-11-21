@@ -234,7 +234,9 @@ class EmailVerificationService:
                 )
             
             # 쿨다운 시간 체크
-            time_since_created = datetime.now(timezone.utc) - existing.created_at.replace(tzinfo=None)
+            now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+            created_naive = existing.created_at.replace(tzinfo=None)
+            time_since_created = now_naive - created_naive
             if time_since_created.total_seconds() < self.RESEND_COOLDOWN_SECONDS:
                 remaining = self.RESEND_COOLDOWN_SECONDS - int(time_since_created.total_seconds())
                 raise BadRequestException(
@@ -304,7 +306,9 @@ class EmailVerificationService:
             )
         
         # 만료 시간 체크
-        if datetime.now(timezone.utc) > verification.expires_at.replace(tzinfo=None):
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        expires_naive = verification.expires_at.replace(tzinfo=None)
+        if now_naive > expires_naive:
             raise BadRequestException(
                 "인증 코드가 만료되었습니다. 새로운 인증 코드를 요청해주세요."
             )

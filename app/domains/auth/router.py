@@ -11,14 +11,22 @@ from app.domains.auth.schema import (
     AllowedEmailDomainUpdate,
     AllowedEmailDomainResponse,
     DomainCheckRequest,
-    DomainCheckResponse
+    DomainCheckResponse,
+    SendVerificationCodeRequest,
+    SendVerificationCodeResponse,
+    VerifyCodeRequest,
+    VerifyCodeResponse
 )
 from app.domains.auth.service import (
     get_auth_service,
     get_allowed_email_domain_service,
+    get_email_verification_service,
     AuthService,
-    AllowedEmailDomainService
+    AllowedEmailDomainService,
+    EmailVerificationService
 )
+from app.common.email import get_email_service, EmailService
+from app.common.exceptions import BadRequestException
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer()
@@ -199,4 +207,114 @@ async def delete_allowed_domain(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Domain not found"
+        )
+
+
+# ============================================
+# Email Verification
+# ============================================
+
+@router.post("/send-verification-code", response_model=SendVerificationCodeResponse)
+async def send_verification_code(
+    request: SendVerificationCodeRequest,
+    db: Session = Depends(get_db),
+    domain_service: AllowedEmailDomainService = Depends(get_allowed_email_domain_service),
+    verification_service: EmailVerificationService = Depends(get_email_verification_service),
+    email_service: EmailService = Depends(get_email_service)
+):
+    """
+    이메일 인증 코드 전송
+    
+    1. 이메일 도메인 검증 (허용된 도메인인지 확인)
+    2. 인증 코드 생성
+    3. 이메일 전송
+    
+    - **email**: 인증할 이메일 주소
+    
+    Returns:
+        전송 성공 여부 및 만료 시간 정보
+        
+    Raises:
+        - 400: 허용되지 않은 도메인
+        - 400: 재전송 제한 초과
+    """
+    try:
+        # 1. 도메인 검증
+        domain_check = await domain_service.check_domain_allowed(db, request.email)
+        if not domain_check.is_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="허용되지 않은 이메일 도메인입니다."
+            )
+        
+        # 2. 인증 코드 생성
+        verification = verification_service.create_verification_code(db, request.email)
+        
+        # 3. 이메일 전송
+        email_sent = email_service.send_verification_code(
+            to_email=request.email,
+            code=verification.code,
+            expires_minutes=verification_service.CODE_EXPIRE_MINUTES
+        )
+        
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요."
+            )
+        
+        return SendVerificationCodeResponse(
+            success=True,
+            message="인증 코드가 이메일로 전송되었습니다.",
+            expires_in_minutes=verification_service.CODE_EXPIRE_MINUTES,
+            resend_count=verification.resend_count,
+            max_resend_count=verification_service.MAX_RESEND_COUNT
+        )
+        
+    except BadRequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.detail)
+        )
+
+
+@router.post("/verify-code", response_model=VerifyCodeResponse)
+async def verify_code(
+    request: VerifyCodeRequest,
+    db: Session = Depends(get_db),
+    verification_service: EmailVerificationService = Depends(get_email_verification_service)
+):
+    """
+    이메일 인증 코드 검증
+    
+    - **email**: 인증할 이메일 주소
+    - **code**: 6자리 인증 코드
+    
+    Returns:
+        인증 성공 여부
+        
+    Raises:
+        - 400: 유효하지 않은 코드
+        - 400: 만료된 코드
+        - 400: 최대 시도 횟수 초과
+    """
+    try:
+        verified = verification_service.verify_code(db, request.email, request.code)
+        
+        if verified:
+            return VerifyCodeResponse(
+                success=True,
+                message="이메일 인증이 완료되었습니다.",
+                verified=True
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="인증에 실패했습니다."
+            )
+            
+    except BadRequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.detail)
         )
