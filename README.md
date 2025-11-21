@@ -135,7 +135,13 @@ ASYNC_DATABASE_URL=postgresql+asyncpg://tinolife:tinolife123@localhost:5432/tino
 make migrate-up
 ```
 
-#### 5. 개발 서버 실행
+#### 5. 초기 데이터 시딩 (선택)
+
+```bash
+python scripts/seed_initial_data.py
+```
+
+#### 6. 개발 서버 실행
 
 ```bash
 make dev-local

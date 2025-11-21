@@ -28,6 +28,13 @@ pipenv run alembic upgrade head
 
 echo "✅ Migrations completed!"
 echo ""
+echo "🌱 Seeding initial data..."
+
+# 초기 데이터 시딩 실행
+python scripts/seed_initial_data.py
+
+echo "✅ Seeding completed!"
+echo ""
 echo "🚀 Starting application..."
 
 # 전달된 명령 실행

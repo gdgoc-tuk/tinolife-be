@@ -1,7 +1,145 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
-from app.domains.auth.schema import LoginRequest, LoginResponse, TokenData
+from sqlalchemy.orm import Session
+
+from app.domains.auth.schema import (
+    LoginRequest, 
+    LoginResponse, 
+    TokenData,
+    AllowedEmailDomainCreate,
+    AllowedEmailDomainUpdate,
+    DomainCheckResponse
+)
+from app.domains.auth.model import AllowedEmailDomain
 from app.core.config import settings
+
+
+class AllowedEmailDomainService:
+    """허용 이메일 도메인 관리 서비스"""
+
+    async def check_domain_allowed(self, db: Session, email: str) -> DomainCheckResponse:
+        """
+        이메일 도메인이 허용되는지 확인
+        
+        Args:
+            db: 데이터베이스 세션
+            email: 검증할 이메일 주소
+            
+        Returns:
+            DomainCheckResponse: 허용 여부 및 도메인 정보
+        """
+        # 이메일에서 도메인 추출 (@ 포함)
+        if "@" not in email:
+            return DomainCheckResponse(is_allowed=False)
+        
+        domain = "@" + email.split("@")[1]
+        
+        # 데이터베이스에서 도메인 조회
+        allowed_domain = db.query(AllowedEmailDomain).filter(
+            AllowedEmailDomain.domain == domain,
+            AllowedEmailDomain.is_active == True
+        ).first()
+        
+        if allowed_domain:
+            return DomainCheckResponse(
+                is_allowed=True,
+                domain=allowed_domain.domain,
+                university_name=allowed_domain.university_name
+            )
+        
+        return DomainCheckResponse(is_allowed=False)
+
+    async def get_allowed_domains(
+        self, 
+        db: Session,
+        active_only: bool = True
+    ) -> List[AllowedEmailDomain]:
+        """허용 도메인 목록 조회"""
+        query = db.query(AllowedEmailDomain)
+        
+        if active_only:
+            query = query.filter(AllowedEmailDomain.is_active == True)
+        
+        return query.order_by(AllowedEmailDomain.university_name).all()
+
+    async def get_domain_by_id(
+        self, 
+        db: Session, 
+        domain_id: int
+    ) -> Optional[AllowedEmailDomain]:
+        """ID로 도메인 조회"""
+        return db.query(AllowedEmailDomain).filter(
+            AllowedEmailDomain.id == domain_id
+        ).first()
+
+    async def get_domain_by_name(
+        self, 
+        db: Session, 
+        domain: str
+    ) -> Optional[AllowedEmailDomain]:
+        """도메인명으로 조회"""
+        return db.query(AllowedEmailDomain).filter(
+            AllowedEmailDomain.domain == domain
+        ).first()
+
+    async def create_allowed_domain(
+        self, 
+        db: Session, 
+        domain_data: AllowedEmailDomainCreate
+    ) -> AllowedEmailDomain:
+        """허용 도메인 생성"""
+        # @ 자동 추가
+        domain = domain_data.domain
+        if not domain.startswith("@"):
+            domain = "@" + domain
+        
+        allowed_domain = AllowedEmailDomain(
+            domain=domain,
+            university_name=domain_data.university_name
+        )
+        db.add(allowed_domain)
+        db.commit()
+        db.refresh(allowed_domain)
+        return allowed_domain
+
+    async def update_allowed_domain(
+        self, 
+        db: Session, 
+        domain_id: int, 
+        domain_data: AllowedEmailDomainUpdate
+    ) -> Optional[AllowedEmailDomain]:
+        """허용 도메인 업데이트"""
+        allowed_domain = await self.get_domain_by_id(db, domain_id)
+        if not allowed_domain:
+            return None
+        
+        update_data = domain_data.model_dump(exclude_unset=True)
+        
+        # @ 자동 추가
+        if "domain" in update_data and update_data["domain"]:
+            if not update_data["domain"].startswith("@"):
+                update_data["domain"] = "@" + update_data["domain"]
+        
+        for field, value in update_data.items():
+            setattr(allowed_domain, field, value)
+        
+        db.commit()
+        db.refresh(allowed_domain)
+        return allowed_domain
+
+    async def delete_allowed_domain(
+        self, 
+        db: Session, 
+        domain_id: int
+    ) -> bool:
+        """허용 도메인 삭제 (소프트 삭제)"""
+        allowed_domain = await self.get_domain_by_id(db, domain_id)
+        if not allowed_domain:
+            return False
+        
+        allowed_domain.is_active = False
+        db.commit()
+        return True
 
 
 class AuthService:
@@ -42,5 +180,11 @@ class AuthService:
         pass
 
 
-# 싱글톤 인스턴스
-auth_service = AuthService()
+def get_allowed_email_domain_service() -> AllowedEmailDomainService:
+    """AllowedEmailDomainService 의존성 주입"""
+    return AllowedEmailDomainService()
+
+
+def get_auth_service() -> AuthService:
+    """AuthService 의존성 주입"""
+    return AuthService()
