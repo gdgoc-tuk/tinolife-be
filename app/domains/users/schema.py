@@ -1,18 +1,41 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
 class UserBase(BaseModel):
     """사용자 기본 스키마"""
     email: EmailStr
-    username: str = Field(..., min_length=3, max_length=50)
-    full_name: Optional[str] = None
+    nickname: str = Field(..., min_length=2, max_length=20, description="닉네임")
 
 
-class UserCreate(UserBase):
-    """사용자 생성 스키마"""
-    password: str = Field(..., min_length=8)
+class SignupRequest(BaseModel):
+    """회원가입 요청 스키마"""
+    email: EmailStr = Field(..., description="대학 이메일")
+    password: str = Field(..., min_length=8, max_length=100, description="비밀번호")
+    nickname: str = Field(..., min_length=2, max_length=20, description="닉네임")
+    grade: int = Field(..., ge=1, le=4, description="학년 (1-4)")
+    major_id: int = Field(..., description="전공 ID")
+    interest_ids: Optional[List[int]] = Field(default=[], description="관심사 ID 목록 (선택)")
+    privacy_policy_agreed: bool = Field(..., description="개인정보 처리방침 동의")
+
+
+class SignupResponse(BaseModel):
+    """회원가입 응답 스키마"""
+    id: int
+    email: EmailStr
+    nickname: str
+    message: str = "회원가입이 완료되었습니다."
+
+
+class UserCreate(BaseModel):
+    """내부 사용자 생성 스키마"""
+    email: EmailStr
+    hashed_password: str
+    nickname: str
+    grade: int
+    major_id: int
+    is_email_verified: bool = True
 
 
 class UserUpdate(BaseModel):
