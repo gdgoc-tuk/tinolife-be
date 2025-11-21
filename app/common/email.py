@@ -176,8 +176,8 @@ class EmailService:
                     </div>
                     
                     <div class="info">
-                        <strong>⏰ 유효 시간:</strong> {expires_minutes}분<br>
-                        <strong>⚠️ 주의:</strong> 이 코드는 일회용이며, 타인에게 공유하지 마세요.
+                        <strong>유효 시간:</strong> {expires_minutes}분<br>
+                        <strong>주의:</strong> 이 코드는 일회용이며, 타인에게 공유하지 마세요.
                     </div>
                     
                     <p>본인이 요청하지 않은 경우, 이 이메일을 무시하셔도 됩니다.</p>
