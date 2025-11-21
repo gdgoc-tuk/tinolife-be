@@ -3,6 +3,7 @@
 초기 데이터 시딩 스크립트
 - 허용된 이메일 도메인
 - 전공 데이터
+- 관심사 데이터
 """
 import sys
 from pathlib import Path
@@ -128,6 +129,78 @@ def seed_majors(db):
     return added_count, skipped_count
 
 
+def seed_interests(db):
+    """관심사 데이터 시딩 (운영자 설정 기본값)"""
+    print("🏷️  관심사 데이터 시딩 중...")
+    
+    # 운영자가 설정한 기본 관심사 목록
+    default_interests = [
+        # 전공
+        "코딩",
+        "AI",
+        "데이터 분석",
+        "반도체",
+        "로봇",
+        "기계 설계",
+        "UI/UX",
+        "미디어 디자인",
+        "경영",
+        "IT 비즈니스",
+        # 활동
+        "공모전",
+        "해커톤",
+        "스타트업",
+        "동아리",
+        "자격증 준비",
+        "연구실 활동",
+        "프로젝트 팀",
+        "오픈소스",
+        "인턴 탐색",
+        # 취미
+        "음악",
+        "여행",
+        "운동",
+        "게임",
+        "독서",
+        "테니스",
+        "영상 제작",
+        "사진",
+        "예술"
+    ]
+    
+    # 데이터베이스에 저장
+    added_count = 0
+    skipped_count = 0
+    
+    for interest_name in default_interests:
+        # 이미 존재하는지 확인
+        existing = db.query(Interest).filter(
+            Interest.name == interest_name
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # 새 관심사 추가
+        new_interest = Interest(
+            name=interest_name,
+            is_active=True
+        )
+        db.add(new_interest)
+        added_count += 1
+    
+    # 커밋
+    if added_count > 0:
+        db.commit()
+        print(f"   ✅ {added_count}개 관심사 추가됨")
+    
+    if skipped_count > 0:
+        print(f"   ⏭️  {skipped_count}개 관심사 이미 존재")
+    
+    return added_count, skipped_count
+
+
 def seed_all():
     """모든 초기 데이터 삽입"""
     print("="*60)
@@ -150,6 +223,11 @@ def seed_all():
         
         # 2. 전공 데이터
         added, skipped = seed_majors(db)
+        total_added += added
+        total_skipped += skipped
+        
+        # 3. 관심사 데이터
+        added, skipped = seed_interests(db)
         total_added += added
         total_skipped += skipped
         
