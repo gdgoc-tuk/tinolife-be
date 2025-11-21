@@ -24,8 +24,10 @@ help:
 	@echo "  make migrate-history - Show migration history"
 	@echo "  make migrate-current - Show current migration version"
 	@echo "  make db-reset        - Reset database (WARNING: drops all data)"
-	@echo "  make seed            - Seed initial data (local)"
-	@echo "  make seed-docker     - Seed initial data (Docker)"
+	@echo ""
+	@echo "Data Seeding:"
+	@echo "  make seed            - Seed all initial data (local)"
+	@echo "  make seed-docker     - Seed all initial data (Docker)"
 	@echo ""
 	@echo "Testing & Code Quality:"
 	@echo "  make test            - Run tests"
@@ -179,9 +181,9 @@ migrate-head:
 
 # Seeding commands
 seed:
-	@echo "Seeding initial data..."
+	@echo "🌱 Seeding initial data (local)..."
 	pipenv run python scripts/seed_initial_data.py
 
 seed-docker:
-	@echo "Seeding initial data in Docker..."
+	@echo "🌱 Seeding initial data in Docker..."
 	docker compose exec app python scripts/seed_initial_data.py

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-통합 초기 데이터 시딩 스크립트
-
-애플리케이션에 필요한 모든 초기 데이터를 삽입합니다.
+초기 데이터 시딩 스크립트
 - 허용된 이메일 도메인
-- 기타 필수 마스터 데이터
+- 전공 데이터
 """
 import sys
 from pathlib import Path
@@ -15,8 +13,13 @@ sys.path.insert(0, str(project_root))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
+from app.core.database import Base
 from app.domains.auth.model import AllowedEmailDomain
+from app.domains.majors.model import Major
+from app.domains.users.model import User
+from app.domains.interests.model import Interest  # 모델 관계를 위해 필요
 
 
 def seed_allowed_domains(db):
@@ -58,6 +61,73 @@ def seed_allowed_domains(db):
     return added_count, skipped_count
 
 
+def seed_majors(db):
+    """전공 데이터 시딩 (운영자 설정 기본값)"""
+    print("🎓 전공 데이터 시딩 중...")
+    
+    # 운영자가 설정한 기본 전공 목록
+    default_majors = [
+        "게임공학과",
+        "컴퓨터공학과",
+        "소프트웨어학과",
+        "인공지능학과",
+        "IT반도체융합대학 자율전공",
+        "전자공학전공",
+        "임베디드시스템전공",
+        "나노반도체공학전공",
+        "반도체시스템전공",
+        "스마트기계융합대학 자율전공",
+        "기계공학과",
+        "기계설계전공",
+        "지능형모빌리티전공",
+        "메카트로닉스전공",
+        "AI로봇전공",
+        "첨단융합대학 자율전공",
+        "신소재공학과",
+        "생명화학공학과",
+        "전력응용시스템전공",
+        "미래에너지시스템전공",
+        "경영학전공",
+        "IT경영전공",
+        "데이터사이언스경영전공",
+        "산업디자인공학전공",
+        "미디어디자인공학전공",
+        "지식융합학부"
+    ]
+    
+    # 데이터베이스에 저장
+    added_count = 0
+    skipped_count = 0
+    
+    for major_name in default_majors:
+        # 이미 존재하는지 확인
+        existing = db.query(Major).filter(
+            Major.name == major_name
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # 새 전공 추가
+        new_major = Major(
+            name=major_name,
+            is_active=True
+        )
+        db.add(new_major)
+        added_count += 1
+    
+    # 커밋
+    if added_count > 0:
+        db.commit()
+        print(f"   ✅ {added_count}개 전공 추가됨")
+    
+    if skipped_count > 0:
+        print(f"   ⏭️  {skipped_count}개 전공 이미 존재")
+    
+    return added_count, skipped_count
+
+
 def seed_all():
     """모든 초기 데이터 삽입"""
     print("="*60)
@@ -78,10 +148,10 @@ def seed_all():
         total_added += added
         total_skipped += skipped
         
-        # 2. 여기에 다른 시드 함수 추가
-        # added, skipped = seed_majors(db)
-        # total_added += added
-        # total_skipped += skipped
+        # 2. 전공 데이터
+        added, skipped = seed_majors(db)
+        total_added += added
+        total_skipped += skipped
         
         print("\n" + "="*60)
         print("✨ 시딩 완료!")

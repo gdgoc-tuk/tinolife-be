@@ -171,6 +171,13 @@ make dev-local
 | `make migrate-current` | 현재 마이그레이션 버전 확인 |
 | `make db-reset` | 데이터베이스 리셋 (주의!) |
 
+### 초기 데이터 시딩
+
+| 명령어 | 설명 |
+|--------|------|
+| `make seed` | 전체 초기 데이터 시딩 (이메일 도메인 + 전공) |
+| `make seed-majors` | 전공 데이터만 시딩/업데이트 |
+
 **참고:** Docker 환경에서 마이그레이션 명령 실행 시:
 
 ```bash

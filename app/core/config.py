@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     SMTP_FROM_NAME: str = "TinoLife"
     
+    # 공공데이터 API 설정
+    PUBLIC_DATA_API_KEY: str = ""
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

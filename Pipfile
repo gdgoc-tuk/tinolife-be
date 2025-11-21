@@ -17,6 +17,7 @@ email-validator = "*"
 python-jose = {extras = ["cryptography"], version = "*"}
 passlib = {extras = ["bcrypt"], version = "*"}
 bcrypt = "==4.1.3"
+requests = "*"
 
 [dev-packages]
 pytest = "*"
