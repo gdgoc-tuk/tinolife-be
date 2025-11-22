@@ -33,6 +33,7 @@ help:
 	@echo "  make test            - Run tests"
 	@echo "  make test-cov        - Run tests with coverage"
 	@echo "  make lint            - Run linter (flake8)"
+	@echo "  make type-check      - Run type checker (mypy, optional)"
 	@echo "  make format          - Format code with black"
 	@echo "  make clean           - Remove cache files"
 
@@ -115,6 +116,9 @@ test-cov:
 lint:
 	@echo "Running linter..."
 	pipenv run flake8 app/ tests/
+
+type-check:
+	@echo "Running type checker..."
 	pipenv run mypy app/
 
 format:

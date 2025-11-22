@@ -7,19 +7,15 @@ from app.domains.majors.schema import MajorCreate, MajorUpdate
 class MajorService:
     """전공 비즈니스 로직을 처리하는 서비스"""
 
-    async def get_majors(
-        self, 
-        db: Session,
-        active_only: bool = True
-    ) -> List[Major]:
+    async def get_majors(self, db: Session, active_only: bool = True) -> List[Major]:
         """
         전공 전체 목록 조회
         """
         query = db.query(Major)
-        
+
         if active_only:
-            query = query.filter(Major.is_active == True)
-        
+            query = query.filter(Major.is_active.is_(True))
+
         return query.order_by(Major.name).all()
 
     async def get_major_by_id(self, db: Session, major_id: int) -> Optional[Major]:
@@ -39,20 +35,17 @@ class MajorService:
         return major
 
     async def update_major(
-        self, 
-        db: Session, 
-        major_id: int, 
-        major_data: MajorUpdate
+        self, db: Session, major_id: int, major_data: MajorUpdate
     ) -> Optional[Major]:
         """전공 업데이트"""
         major = await self.get_major_by_id(db, major_id)
         if not major:
             return None
-        
+
         update_data = major_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(major, field, value)
-        
+
         db.commit()
         db.refresh(major)
         return major
@@ -62,7 +55,7 @@ class MajorService:
         major = await self.get_major_by_id(db, major_id)
         if not major:
             return False
-        
+
         major.is_active = False
         db.commit()
         return True

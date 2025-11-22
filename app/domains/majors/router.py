@@ -13,11 +13,11 @@ router = APIRouter(prefix="/majors", tags=["majors"])
 async def get_majors(
     active_only: bool = Query(True, description="활성화된 전공만 조회"),
     db: Session = Depends(get_db),
-    service: MajorService = Depends(get_major_service)
+    service: MajorService = Depends(get_major_service),
 ):
     """
     전공 전체 목록 조회
-    
+
     - **active_only**: 활성화된 전공만 조회 여부
     """
     majors = await service.get_majors(db, active_only=active_only)
@@ -28,18 +28,17 @@ async def get_majors(
 async def get_major(
     major_id: int,
     db: Session = Depends(get_db),
-    service: MajorService = Depends(get_major_service)
+    service: MajorService = Depends(get_major_service),
 ):
     """
     특정 전공 조회
-    
+
     - **major_id**: 전공 ID
     """
     major = await service.get_major_by_id(db, major_id)
     if not major:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Major not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Major not found"
         )
     return major
 
@@ -48,11 +47,11 @@ async def get_major(
 async def create_major(
     major_data: MajorCreate,
     db: Session = Depends(get_db),
-    service: MajorService = Depends(get_major_service)
+    service: MajorService = Depends(get_major_service),
 ):
     """
     새 전공 생성
-    
+
     - **name**: 전공명 (필수)
     - **code**: 전공 코드 (선택)
     """
@@ -61,9 +60,9 @@ async def create_major(
     if existing_major:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Major with this name already exists"
+            detail="Major with this name already exists",
         )
-    
+
     major = await service.create_major(db, major_data)
     return major
 
@@ -73,18 +72,17 @@ async def update_major(
     major_id: int,
     major_data: MajorUpdate,
     db: Session = Depends(get_db),
-    service: MajorService = Depends(get_major_service)
+    service: MajorService = Depends(get_major_service),
 ):
     """
     전공 정보 업데이트
-    
+
     - **major_id**: 전공 ID
     """
     major = await service.update_major(db, major_id, major_data)
     if not major:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Major not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Major not found"
         )
     return major
 
@@ -93,16 +91,15 @@ async def update_major(
 async def delete_major(
     major_id: int,
     db: Session = Depends(get_db),
-    service: MajorService = Depends(get_major_service)
+    service: MajorService = Depends(get_major_service),
 ):
     """
     전공 삭제 (소프트 삭제)
-    
+
     - **major_id**: 전공 ID
     """
     success = await service.delete_major(db, major_id)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Major not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Major not found"
         )

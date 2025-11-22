@@ -18,46 +18,50 @@ from app.domains.interests.router import router as interests_router
 async def lifespan(app: FastAPI):
     """
     애플리케이션 수명 주기 관리
-    
+
     startup: 애플리케이션 시작 시 실행
     shutdown: 애플리케이션 종료 시 실행
-    
+
     주의: 개발 모드에서 리로드 시마다 실행될 수 있습니다.
     실제 초기 데이터는 entrypoint.sh에서 처리하며,
     여기서는 데이터 확인만 수행합니다.
     """
     # Startup
     from app.domains.auth.model import AllowedEmailDomain
-    
+
     try:
         engine = create_engine(settings.DATABASE_URL)
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
-        
+
         # 허용 도메인 개수 확인
-        domain_count = db.query(AllowedEmailDomain).filter(
-            AllowedEmailDomain.is_active == True
-        ).count()
-        
+        domain_count = (
+            db.query(AllowedEmailDomain)
+            .filter(AllowedEmailDomain.is_active.is_(True))
+            .count()
+        )
+
         if domain_count == 0:
             print("⚠️  경고: 허용된 이메일 도메인이 없습니다!")
-            print("   scripts/seed_initial_data.py를 실행하여 초기 데이터를 추가하세요.")
+            print(
+                "   scripts/seed_initial_data.py를 실행하여 초기 데이터를 추가하세요."
+            )
         else:
             print(f"✅ 허용 이메일 도메인: {domain_count}개 활성화됨")
-        
+
         db.close()
     except Exception as e:
         print(f"⚠️  Startup 체크 실패: {e}")
-    
+
     yield  # 애플리케이션 실행
-    
+
     # Shutdown (필요시 정리 작업)
     print("👋 애플리케이션 종료 중...")
 
 
 def create_app() -> FastAPI:
     """FastAPI 애플리케이션 팩토리"""
-    
+
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
