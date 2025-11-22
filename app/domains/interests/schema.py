@@ -25,20 +25,20 @@ class InterestResponse(InterestBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class UserInterestsRequest(BaseModel):
     """사용자 관심사 업데이트 요청"""
     interest_ids: List[int] = Field(..., description="관심사 ID 목록")
     
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "interest_ids": [1, 2, 3]
             }
         }
+    }
 
 
 class UserInterestsResponse(BaseModel):

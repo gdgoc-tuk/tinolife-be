@@ -31,8 +31,7 @@ class AllowedEmailDomainResponse(AllowedEmailDomainBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class DomainCheckRequest(BaseModel):
@@ -111,5 +110,4 @@ class VerificationStatusResponse(BaseModel):
     resend_count: int = 0
     created_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
