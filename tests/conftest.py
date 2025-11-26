@@ -11,6 +11,17 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.core.database import Base, get_db
 
+# 모든 모델을 import하여 Base.metadata에 등록
+from app.domains.users.model import User  # noqa: F401
+from app.domains.users.tino_transaction import TinoTransaction  # noqa: F401
+from app.domains.majors.model import Major  # noqa: F401
+from app.domains.interests.model import Interest, user_interests  # noqa: F401
+from app.domains.auth.model import AllowedEmailDomain, EmailVerification  # noqa: F401
+from app.domains.qna.model import (  # noqa: F401
+    Category, Tag, Question, Answer, AnswerVote, AnswerComment,
+    QuestionInterest, QuestionBookmark, Report
+)
+
 
 # 테스트용 인메모리 데이터베이스 설정
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -100,6 +111,7 @@ def sample_user(db_session, sample_major):
     user = User(
         email="test@test.ac.kr",
         nickname="테스트유저",
+        student_id="20200001",
         hashed_password=hash_password("testpassword123"),
         grade=3,
         major_id=sample_major.id,

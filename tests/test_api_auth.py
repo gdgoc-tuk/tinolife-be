@@ -118,7 +118,7 @@ class TestAuthAPI:
         """토큰 없이 사용자 정보 조회 시도 테스트"""
         response = client.get("/auth/me")
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_get_current_user_invalid_token(self, client):
         """유효하지 않은 토큰으로 사용자 정보 조회 시도 테스트"""

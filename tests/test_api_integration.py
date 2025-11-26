@@ -102,6 +102,7 @@ class TestUserFlow:
             email="dsstudent@test.ac.kr",
             hashed_password=hash_password("password123"),
             nickname="데이터과학도",
+            student_id="20210001",
             grade=1,
             major_id=major_id,
             is_active=True,

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, desc
-from datetime import datetime
+from sqlalchemy import func, desc, select
+from datetime import datetime, timezone
 
 from app.domains.qna.model import (
     Category, Tag, Question, Answer, AnswerVote, AnswerComment, 
@@ -923,8 +923,12 @@ class AnswerService:
         if answer.is_deleted or answer.is_hidden:
             raise BadRequestException("삭제되거나 숨겨진 답변은 채택할 수 없습니다")
         
+        # 본인 답변 채택 제한
+        if answer.user_id == user_id:
+            raise BadRequestException("자신의 답변은 채택할 수 없습니다")
+        
         question.accepted_answer_id = answer_id
-        question.accepted_at = datetime.utcnow()
+        question.accepted_at = datetime.now(timezone.utc)
         answer.is_accepted = True
         
         token_service = TokenService()
@@ -1338,7 +1342,7 @@ class SearchService:
         ).subquery()
         
         # 태그 검색 쿼리
-        tag_query = base_query.filter(Question.id.in_(tag_question_ids))
+        tag_query = base_query.filter(Question.id.in_(select(tag_question_ids)))
         
         # 제목/본문 검색과 태그 검색 합치기 (UNION)
         from sqlalchemy import union
@@ -1349,7 +1353,7 @@ class SearchService:
             (
                 (Question.title.ilike(search_term)) | 
                 (Question.content.ilike(search_term)) |
-                (Question.id.in_(tag_question_ids))
+                (Question.id.in_(select(tag_question_ids)))
             )
         )
         
@@ -1365,7 +1369,7 @@ class SearchService:
         
         # 실제 질문 조회를 위한 쿼리
         result_query = db.query(Question).filter(
-            Question.id.in_(combined_ids.subquery())
+            Question.id.in_(select(combined_ids.subquery()))
         ).options(
             joinedload(Question.category),
             joinedload(Question.major),

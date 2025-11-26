@@ -56,6 +56,7 @@ class TestUsersAPI:
             user = User(
                 email=f"user{i}@test.ac.kr",
                 nickname=f"사용자{i}",
+                student_id=f"2021000{i}",
                 hashed_password=hash_password("password123"),
                 grade=2,
                 major_id=sample_major.id,
