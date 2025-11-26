@@ -39,6 +39,11 @@ class User(Base):
         DateTime(timezone=True), nullable=True, comment="개인정보 처리방침 동의 일시"
     )
 
+    # TINO 토큰
+    tino_balance = Column(
+        Integer, default=10, nullable=False, comment="TINO 토큰 잔액 (신규가입 보너스: 10)"
+    )
+
     # 타임스탬프
     created_at = Column(
         DateTime(timezone=True),

@@ -339,6 +339,8 @@ class QuestionService:
         """
         from app.domains.qna.model import Category
         from app.domains.majors.model import Major
+        from app.domains.users.token_service import TokenService
+        from app.domains.users.tino_transaction import TransactionType
         
         category = db.query(Category).filter(Category.id == question_data.category_id).first()
         if not category or not category.is_active:
@@ -348,6 +350,18 @@ class QuestionService:
             major = db.query(Major).filter(Major.id == question_data.major_id).first()
             if not major:
                 raise NotFoundException(f"전공을 찾을 수 없습니다: {question_data.major_id}")
+        
+        token_service = TokenService()
+        
+        # 바운티가 설정된 경우 토큰 차감
+        if question_data.bounty > 0:
+            await token_service.deduct_token(
+                db=db,
+                user_id=user_id,
+                amount=question_data.bounty,
+                transaction_type=TransactionType.QUESTION_BOUNTY,
+                description=f"질문 바운티 설정: {question_data.title[:50]}"
+            )
         
         question = Question(
             user_id=user_id,
@@ -365,6 +379,30 @@ class QuestionService:
                 question.tags.append(tag)
         
         db.add(question)
+        db.flush()
+        
+        # 바운티가 있는 경우 question_id를 업데이트
+        if question_data.bounty > 0:
+            from app.domains.users.tino_transaction import TinoTransaction as TinoTx
+            recent_tx = db.query(TinoTx)\
+              .filter(TinoTx.user_id == user_id)\
+              .filter(TinoTx.question_id == None)\
+              .filter(TinoTx.transaction_type == TransactionType.QUESTION_BOUNTY)\
+              .order_by(desc(TinoTx.created_at))\
+              .first()
+            if recent_tx:
+                recent_tx.question_id = question.id
+        
+        # 질문 등록 보상 1 TINO 지급
+        await token_service.charge_token(
+            db=db,
+            user_id=user_id,
+            amount=1,
+            transaction_type=TransactionType.QUESTION_REWARD,
+            description="질문 등록 보상",
+            question_id=question.id
+        )
+        
         db.commit()
         db.refresh(question)
         
@@ -515,6 +553,29 @@ class QuestionService:
             for tag_name in question_data.tag_names:
                 tag = await self.tag_service.get_or_create_tag(db, tag_name)
                 question.tags.append(tag)
+        
+        # 바운티 상향 조정 (하향 불가)
+        if question_data.bounty is not None:
+            if question_data.bounty < question.bounty:
+                raise BadRequestException("바운티는 상향 조정만 가능합니다")
+            
+            if question_data.bounty > question.bounty:
+                additional_bounty = question_data.bounty - question.bounty
+                
+                from app.domains.users.token_service import TokenService
+                from app.domains.users.tino_transaction import TransactionType
+                
+                token_service = TokenService()
+                await token_service.deduct_token(
+                    db=db,
+                    user_id=user_id,
+                    amount=additional_bounty,
+                    transaction_type=TransactionType.QUESTION_BOUNTY,
+                    description=f"바운티 상향 조정: {question.bounty} → {question_data.bounty}",
+                    question_id=question_id
+                )
+                
+                question.bounty = question_data.bounty
         
         db.commit()
         db.refresh(question)

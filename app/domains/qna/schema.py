@@ -1,7 +1,7 @@
 """
 QnA 스키마 정의
 """
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -77,8 +77,16 @@ class QuestionBase(BaseModel):
     content: str = Field(..., min_length=1, description="본문")
     category_id: int = Field(..., gt=0, description="카테고리 ID")
     major_id: Optional[int] = Field(None, gt=0, description="전공 ID (null=전공무관)")
-    bounty: int = Field(default=0, ge=0, description="바운티 (TINO 토큰)")
+    bounty: int = Field(default=0, ge=0, le=100, description="바운티 (TINO 토큰, 0 또는 5~100)")
     is_anonymous: bool = Field(default=False, description="익명 여부")
+    
+    @field_validator('bounty')
+    @classmethod
+    def validate_bounty(cls, v: int) -> int:
+        """바운티 정책: 0(무료) 또는 최소 5 ~ 최대 100"""
+        if v != 0 and (v < 5 or v > 100):
+            raise ValueError('바운티는 0(무료) 또는 5~100 TINO 사이여야 합니다')
+        return v
 
 
 class QuestionCreate(QuestionBase):
@@ -94,6 +102,15 @@ class QuestionUpdate(BaseModel):
     major_id: Optional[int] = Field(None, gt=0, description="전공 ID")
     is_anonymous: Optional[bool] = Field(None, description="익명 여부")
     tag_names: Optional[list[str]] = Field(None, max_length=10, description="태그명 리스트")
+    bounty: Optional[int] = Field(None, ge=0, le=100, description="바운티 증가 (상향 조정만 가능)")
+    
+    @field_validator('bounty')
+    @classmethod
+    def validate_bounty(cls, v: Optional[int]) -> Optional[int]:
+        """바운티 정책: 0(무료) 또는 최소 5 ~ 최대 100"""
+        if v is not None and v != 0 and (v < 5 or v > 100):
+            raise ValueError('바운티는 0(무료) 또는 5~100 TINO 사이여야 합니다')
+        return v
 
 
 class QuestionAuthorResponse(BaseModel):

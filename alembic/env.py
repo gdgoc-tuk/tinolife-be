@@ -30,6 +30,7 @@ from app.core.database import Base
 
 # 모든 도메인의 모델 import (autogenerate가 감지할 수 있도록)
 from app.domains.users.model import User  # noqa
+from app.domains.users.tino_transaction import TinoTransaction, TransactionType  # noqa
 from app.domains.auth.model import RefreshToken, LoginHistory, EmailVerification, AllowedEmailDomain  # noqa
 from app.domains.majors.model import Major  # noqa
 from app.domains.interests.model import Interest, user_interests  # noqa

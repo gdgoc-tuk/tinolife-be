@@ -224,3 +224,20 @@ async def update_my_interests(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e.detail)
         )
+
+
+@router.get("/me/wallet")
+async def get_my_wallet(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    내 토큰 잔액 조회
+    
+    Returns:
+        - tino_balance: 현재 TINO 토큰 잔액
+        - updated_at: 마지막 업데이트 시간
+    """
+    return {
+        "tino_balance": current_user.tino_balance,
+        "updated_at": current_user.updated_at
+    }
