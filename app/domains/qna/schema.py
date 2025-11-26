@@ -301,3 +301,39 @@ class SearchResponse(BaseModel):
     page: int
     page_size: int
     query: str
+
+
+class ReportCreate(BaseModel):
+    """신고 생성 스키마"""
+    reason: str = Field(
+        ..., 
+        description="신고 사유 (SPAM, ABUSE, INAPPROPRIATE, OTHER)"
+    )
+    description: Optional[str] = Field(
+        None, 
+        max_length=1000, 
+        description="상세 설명"
+    )
+    
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        valid_reasons = ['SPAM', 'ABUSE', 'INAPPROPRIATE', 'OTHER']
+        if v.upper() not in valid_reasons:
+            raise ValueError(f"신고 사유는 {valid_reasons} 중 하나여야 합니다")
+        return v.upper()
+
+
+class ReportResponse(BaseModel):
+    """신고 응답 스키마"""
+    id: int
+    reporter_id: int
+    question_id: Optional[int]
+    answer_id: Optional[int]
+    reason: str
+    description: Optional[str]
+    status: str
+    created_at: datetime
+    message: str
+    
+    model_config = ConfigDict(from_attributes=True)

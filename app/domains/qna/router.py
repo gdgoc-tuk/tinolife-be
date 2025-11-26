@@ -27,6 +27,8 @@ from app.domains.qna.schema import (
     BookmarkResponse,
     BookmarkListResponse,
     SearchResponse,
+    ReportCreate,
+    ReportResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
@@ -45,6 +47,8 @@ from app.domains.qna.service import (
     get_bookmark_service,
     SearchService,
     get_search_service,
+    ReportService,
+    get_report_service,
 )
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
@@ -640,3 +644,45 @@ async def search_questions(
         page_size=result["page_size"],
         query=result["query"]
     )
+
+
+@router.post("/questions/{question_id}/report", response_model=ReportResponse)
+async def report_question(
+    question_id: int,
+    report_data: ReportCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+):
+    """
+    질문 신고
+    
+    - **question_id**: 신고할 질문 ID
+    - **reason**: 신고 사유 (SPAM, ABUSE, INAPPROPRIATE, OTHER)
+    - **description**: 상세 설명 (선택)
+    """
+    result = await service.report_question(
+        db, question_id, current_user.id, report_data.reason, report_data.description
+    )
+    return ReportResponse(**result)
+
+
+@router.post("/answers/{answer_id}/report", response_model=ReportResponse)
+async def report_answer(
+    answer_id: int,
+    report_data: ReportCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+):
+    """
+    답변 신고
+    
+    - **answer_id**: 신고할 답변 ID
+    - **reason**: 신고 사유 (SPAM, ABUSE, INAPPROPRIATE, OTHER)
+    - **description**: 상세 설명 (선택)
+    """
+    result = await service.report_answer(
+        db, answer_id, current_user.id, report_data.reason, report_data.description
+    )
+    return ReportResponse(**result)

@@ -437,3 +437,59 @@ class AnswerImage(Base):
 
     # 관계
     answer = relationship("Answer", back_populates="images")
+
+
+class Report(Base):
+    """신고 테이블"""
+
+    __tablename__ = "reports"
+    __table_args__ = (
+        UniqueConstraint("reporter_id", "question_id", name="uq_reporter_question"),
+        UniqueConstraint("reporter_id", "answer_id", name="uq_reporter_answer"),
+        {"comment": "질문/답변 신고"},
+    )
+
+    id = Column(Integer, primary_key=True, index=True, comment="신고 ID")
+    reporter_id = Column(
+        Integer, ForeignKey("users.id"), nullable=False, comment="신고자 ID"
+    )
+    question_id = Column(
+        Integer, ForeignKey("questions.id"), nullable=True, comment="신고된 질문 ID"
+    )
+    answer_id = Column(
+        Integer, ForeignKey("answers.id"), nullable=True, comment="신고된 답변 ID"
+    )
+    
+    # 신고 정보
+    reason = Column(
+        String(50), nullable=False, comment="신고 사유 (SPAM, ABUSE, INAPPROPRIATE, OTHER)"
+    )
+    description = Column(Text, nullable=True, comment="상세 설명")
+    
+    # 처리 상태
+    status = Column(
+        String(20), default="PENDING", nullable=False, 
+        comment="처리 상태 (PENDING, REVIEWED, RESOLVED, REJECTED)"
+    )
+    admin_note = Column(Text, nullable=True, comment="관리자 메모")
+    processed_at = Column(DateTime(timezone=True), nullable=True, comment="처리 일시")
+    processed_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="처리자 ID")
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        comment="신고 일시",
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        comment="수정 일시",
+    )
+
+    # 관계
+    reporter = relationship("User", foreign_keys=[reporter_id])
+    question = relationship("Question", backref="reports")
+    answer = relationship("Answer", backref="reports")

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.domains.qna.model import (
     Category, Tag, Question, Answer, AnswerVote, AnswerComment, 
-    question_tags, QuestionInterest, QuestionBookmark
+    question_tags, QuestionInterest, QuestionBookmark, Report
 )
 from app.domains.qna.schema import (
     CategoryCreate, CategoryUpdate, QuestionCreate, QuestionUpdate,
@@ -1432,3 +1432,146 @@ def get_bookmark_service() -> BookmarkService:
 def get_search_service() -> SearchService:
     """SearchService 인스턴스 반환"""
     return SearchService()
+
+
+class ReportService:
+    """신고 비즈니스 로직을 처리하는 서비스"""
+    
+    async def report_question(
+        self,
+        db: Session,
+        question_id: int,
+        reporter_id: int,
+        reason: str,
+        description: Optional[str] = None
+    ) -> dict:
+        """
+        질문 신고
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            reporter_id: 신고자 ID
+            reason: 신고 사유
+            description: 상세 설명
+            
+        Returns:
+            신고 결과
+        """
+        # 질문 존재 확인
+        question = db.query(Question).filter(
+            Question.id == question_id,
+            Question.is_deleted == False
+        ).first()
+        
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        # 자신의 글 신고 방지
+        if question.user_id == reporter_id:
+            raise BadRequestException("자신의 질문은 신고할 수 없습니다")
+        
+        # 중복 신고 확인
+        existing_report = db.query(Report).filter(
+            Report.reporter_id == reporter_id,
+            Report.question_id == question_id
+        ).first()
+        
+        if existing_report:
+            raise BadRequestException("이미 신고한 질문입니다")
+        
+        # 신고 생성
+        report = Report(
+            reporter_id=reporter_id,
+            question_id=question_id,
+            reason=reason,
+            description=description,
+            status="PENDING"
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        
+        return {
+            "id": report.id,
+            "reporter_id": report.reporter_id,
+            "question_id": report.question_id,
+            "answer_id": None,
+            "reason": report.reason,
+            "description": report.description,
+            "status": report.status,
+            "created_at": report.created_at,
+            "message": "신고가 접수되었습니다"
+        }
+    
+    async def report_answer(
+        self,
+        db: Session,
+        answer_id: int,
+        reporter_id: int,
+        reason: str,
+        description: Optional[str] = None
+    ) -> dict:
+        """
+        답변 신고
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            reporter_id: 신고자 ID
+            reason: 신고 사유
+            description: 상세 설명
+            
+        Returns:
+            신고 결과
+        """
+        # 답변 존재 확인
+        answer = db.query(Answer).filter(
+            Answer.id == answer_id,
+            Answer.is_deleted == False
+        ).first()
+        
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        # 자신의 글 신고 방지
+        if answer.user_id == reporter_id:
+            raise BadRequestException("자신의 답변은 신고할 수 없습니다")
+        
+        # 중복 신고 확인
+        existing_report = db.query(Report).filter(
+            Report.reporter_id == reporter_id,
+            Report.answer_id == answer_id
+        ).first()
+        
+        if existing_report:
+            raise BadRequestException("이미 신고한 답변입니다")
+        
+        # 신고 생성
+        report = Report(
+            reporter_id=reporter_id,
+            answer_id=answer_id,
+            reason=reason,
+            description=description,
+            status="PENDING"
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        
+        return {
+            "id": report.id,
+            "reporter_id": report.reporter_id,
+            "question_id": None,
+            "answer_id": report.answer_id,
+            "reason": report.reason,
+            "description": report.description,
+            "status": report.status,
+            "created_at": report.created_at,
+            "message": "신고가 접수되었습니다"
+        }
+
+
+def get_report_service() -> ReportService:
+    """ReportService 인스턴스 반환"""
+    return ReportService()
