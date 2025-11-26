@@ -20,12 +20,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # users 테이블에 student_id 컬럼 추가
+    # 1. users 테이블에 student_id 컬럼 추가 (nullable=True로 먼저 추가)
     op.add_column('users', sa.Column('student_id', sa.String(length=20), nullable=True, comment='학번'))
     
-    # 기존 데이터가 있을 경우를 대비해 임시로 nullable=True로 추가 후
-    # 기본값 설정 또는 데이터 마이그레이션을 수행한 뒤 nullable=False로 변경
-    # 여기서는 개발 초기 단계로 가정하고 바로 nullable=False로 변경
+    # 2. 기존 데이터에 기본값 설정 (이메일에서 추출하거나 임시값 설정)
+    # 이메일 형식이 student_id@domain.com인 경우 student_id 추출, 아니면 'TEMP_' + user_id
+    op.execute("""
+        UPDATE users 
+        SET student_id = COALESCE(
+            CASE 
+                WHEN email ~ '^[0-9]+@' THEN SUBSTRING(email FROM '^([0-9]+)@')
+                ELSE 'TEMP_' || id::text
+            END,
+            'TEMP_' || id::text
+        )
+        WHERE student_id IS NULL
+    """)
+    
+    # 3. nullable=False로 변경
     op.alter_column('users', 'student_id', nullable=False)
 
 
