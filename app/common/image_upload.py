@@ -121,13 +121,19 @@ class ImageUploader:
         # 파일명 생성
         image_key = self._generate_filename(file.filename, prefix)
         
-        # S3 클라이언트 생성
-        s3_client = boto3.client(
-            's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_S3_REGION
-        )
+        # S3 클라이언트 생성 (MinIO 지원)
+        client_config = {
+            'aws_access_key_id': settings.AWS_ACCESS_KEY_ID,
+            'aws_secret_access_key': settings.AWS_SECRET_ACCESS_KEY,
+        }
+        
+        # MinIO 또는 S3 호환 스토리지 사용 시 endpoint_url 설정
+        if settings.AWS_S3_ENDPOINT_URL:
+            client_config['endpoint_url'] = settings.AWS_S3_ENDPOINT_URL
+        else:
+            client_config['region_name'] = settings.AWS_S3_REGION
+        
+        s3_client = boto3.client('s3', **client_config)
         
         # S3 업로드
         s3_client.put_object(
@@ -138,7 +144,14 @@ class ImageUploader:
         )
         
         # URL 생성
-        image_url = f"https://{settings.AWS_S3_BUCKET}.s3.{settings.AWS_S3_REGION}.amazonaws.com/{image_key}"
+        if settings.AWS_S3_ENDPOINT_URL:
+            # MinIO URL (외부 접근용 URL 사용)
+            # Docker 내부: http://minio:9000, 외부: http://localhost:9000
+            external_endpoint = settings.AWS_S3_ENDPOINT_URL.replace("minio", "localhost")
+            image_url = f"{external_endpoint}/{settings.AWS_S3_BUCKET}/{image_key}"
+        else:
+            # AWS S3 URL
+            image_url = f"https://{settings.AWS_S3_BUCKET}.s3.{settings.AWS_S3_REGION}.amazonaws.com/{image_key}"
         
         return image_url, image_key, file_size, file.content_type
     
@@ -170,18 +183,24 @@ class ImageUploader:
         return False
     
     def delete_s3(self, image_key: str) -> bool:
-        """S3 이미지 삭제"""
+        """S3/MinIO 이미지 삭제"""
         try:
             import boto3
         except ImportError:
             return False
         
-        s3_client = boto3.client(
-            's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_S3_REGION
-        )
+        # S3 클라이언트 생성 (MinIO 지원)
+        client_config = {
+            'aws_access_key_id': settings.AWS_ACCESS_KEY_ID,
+            'aws_secret_access_key': settings.AWS_SECRET_ACCESS_KEY,
+        }
+        
+        if settings.AWS_S3_ENDPOINT_URL:
+            client_config['endpoint_url'] = settings.AWS_S3_ENDPOINT_URL
+        else:
+            client_config['region_name'] = settings.AWS_S3_REGION
+        
+        s3_client = boto3.client('s3', **client_config)
         
         s3_client.delete_object(
             Bucket=settings.AWS_S3_BUCKET,

@@ -60,12 +60,13 @@ class Settings(BaseSettings):
     MAX_IMAGE_SIZE: int = 5 * 1024 * 1024  # 5MB
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     
-    # S3 설정 (선택적)
+    # S3/MinIO 설정
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_S3_BUCKET: str = ""
-    AWS_S3_REGION: str = "ap-northeast-2"
-    USE_S3: bool = False  # True면 S3 사용, False면 로컬 저장
+    AWS_S3_BUCKET: str = "tinolife"
+    AWS_S3_REGION: str = "us-east-1"
+    AWS_S3_ENDPOINT_URL: str = ""  # MinIO용 (예: http://minio:9000)
+    USE_S3: bool = False  # True면 S3/MinIO 사용, False면 로컬 저장
 
     model_config = SettingsConfigDict(
         env_file=".env",
