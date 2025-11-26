@@ -33,6 +33,19 @@ from app.domains.users.model import User  # noqa
 from app.domains.auth.model import RefreshToken, LoginHistory, EmailVerification, AllowedEmailDomain  # noqa
 from app.domains.majors.model import Major  # noqa
 from app.domains.interests.model import Interest, user_interests  # noqa
+from app.domains.qna.model import (  # noqa
+    Category,
+    Tag,
+    Question,
+    Answer,
+    AnswerVote,
+    AnswerComment,
+    QuestionInterest,
+    QuestionBookmark,
+    QuestionImage,
+    AnswerImage,
+    question_tags,
+)
 
 target_metadata = Base.metadata
 
