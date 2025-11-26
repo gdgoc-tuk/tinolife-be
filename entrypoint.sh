@@ -21,12 +21,26 @@ done
 
 echo "✅ Database is ready!"
 echo ""
-echo "🔄 Running database migrations..."
+echo "🔄 Checking database migration status..."
+
+# 현재 마이그레이션 버전 확인
+echo "📊 Current migration version:"
+pipenv run alembic current 2>&1 | grep -E "^[a-f0-9]+|^INFO" || echo "   ⚠️  No migrations applied yet"
+
+echo ""
+echo "📊 Target migration version:"
+pipenv run alembic heads 2>&1 | grep -E "^[a-f0-9]+" || echo "   ⚠️  No migration files found"
+
+echo ""
+echo "🔄 Applying database migrations..."
 
 # Alembic 마이그레이션 실행
-pipenv run alembic upgrade head
-
-echo "✅ Migrations completed!"
+if pipenv run alembic upgrade head 2>&1; then
+  echo "✅ Migrations applied successfully!"
+else
+  echo "❌ Migration failed!"
+  exit 1
+fi
 echo ""
 echo "🌱 Seeding initial data..."
 
