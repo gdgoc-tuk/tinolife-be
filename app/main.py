@@ -12,6 +12,7 @@ from app.domains.users.router import router as users_router
 from app.domains.auth.router import router as auth_router
 from app.domains.majors.router import router as majors_router
 from app.domains.interests.router import router as interests_router
+from app.domains.qna.router import router as qna_router
 
 
 @asynccontextmanager
@@ -27,7 +28,15 @@ async def lifespan(app: FastAPI):
     여기서는 데이터 확인만 수행합니다.
     """
     # Startup
-    from app.domains.auth.model import AllowedEmailDomain
+    # 모든 모델 임포트 (SQLAlchemy relationship 설정을 위해 필요)
+    from app.domains.users.model import User
+    from app.domains.auth.model import AllowedEmailDomain, RefreshToken, LoginHistory, EmailVerification
+    from app.domains.majors.model import Major
+    from app.domains.interests.model import Interest, user_interests
+    from app.domains.qna.model import (
+        Category, Tag, Question, Answer, AnswerVote, AnswerComment,
+        QuestionInterest, QuestionBookmark, QuestionImage, AnswerImage, question_tags
+    )
 
     try:
         engine = create_engine(settings.DATABASE_URL)
@@ -87,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(majors_router, prefix="/api/v1")
     app.include_router(interests_router, prefix="/api/v1")
+    app.include_router(qna_router, prefix="/api/v1")
 
     # 기본 엔드포인트
     @app.get("/")
