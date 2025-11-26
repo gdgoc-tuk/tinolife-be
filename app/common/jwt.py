@@ -40,7 +40,41 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
+
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+
+    return encoded_jwt
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    JWT 리프레시 토큰 생성
+
+    Args:
+        data: 토큰에 포함할 데이터 (user_id, email 등)
+        expires_delta: 토큰 만료 시간 (기본값: 7일)
+
+    Returns:
+        str: JWT 리프레시 토큰
+
+    Example:
+        >>> token = create_refresh_token({"user_id": 1, "email": "user@test.com"})
+        >>> print(token[:10])
+        eyJhbGciOi...
+    """
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+
+    to_encode.update({"exp": expire, "type": "refresh"})
 
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -70,6 +104,45 @@ def verify_token(token: str) -> Optional[TokenData]:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+
+        user_id: int = payload.get("user_id")
+        email: str = payload.get("email")
+
+        if user_id is None or email is None:
+            return None
+
+        return TokenData(user_id=user_id, email=email)
+
+    except JWTError:
+        return None
+
+
+def verify_refresh_token(token: str) -> Optional[TokenData]:
+    """
+    JWT 리프레시 토큰 검증 및 페이로드 추출
+
+    Args:
+        token: JWT 리프레시 토큰
+
+    Returns:
+        TokenData: 토큰에 포함된 사용자 정보
+        None: 토큰이 유효하지 않거나 리프레시 토큰이 아닌 경우
+
+    Example:
+        >>> token = create_refresh_token({"user_id": 1, "email": "user@test.com"})
+        >>> data = verify_refresh_token(token)
+        >>> print(data.user_id)
+        1
+    """
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+
+        # 리프레시 토큰인지 확인
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            return None
 
         user_id: int = payload.get("user_id")
         email: str = payload.get("email")

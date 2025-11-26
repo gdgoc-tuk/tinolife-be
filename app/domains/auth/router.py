@@ -16,6 +16,8 @@ from app.domains.auth.schema import (
     SendVerificationCodeResponse,
     VerifyCodeRequest,
     VerifyCodeResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
 )
 from app.domains.users.schema import SignupRequest, SignupResponse
 from app.domains.users.service import get_user_service, UserService
@@ -58,6 +60,35 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 또는 비밀번호가 일치하지 않습니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return result
+
+
+@router.post("/refresh", response_model=RefreshTokenResponse)
+async def refresh_token(
+    refresh_data: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    토큰 갱신
+
+    리프레시 토큰을 사용하여 새로운 액세스 토큰과 리프레시 토큰을 발급합니다.
+
+    - **refresh_token**: 리프레시 토큰
+
+    Returns:
+        새로운 액세스 토큰과 리프레시 토큰
+
+    Raises:
+        - 401: 유효하지 않거나 만료된 리프레시 토큰
+    """
+    result = auth_service.refresh_tokens(db, refresh_data.refresh_token)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않거나 만료된 리프레시 토큰입니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return result

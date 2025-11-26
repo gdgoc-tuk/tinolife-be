@@ -9,6 +9,7 @@ from app.domains.auth.schema import (
     AllowedEmailDomainCreate,
     AllowedEmailDomainUpdate,
     DomainCheckResponse,
+    RefreshTokenResponse,
 )
 from app.domains.auth.model import AllowedEmailDomain, EmailVerification
 from app.common.utils import generate_verification_code
@@ -151,12 +152,12 @@ class AuthService:
             login_data: 로그인 요청 데이터 (email, password)
 
         Returns:
-            LoginResponse: 액세스 토큰 및 사용자 정보
+            LoginResponse: 액세스 토큰, 리프레시 토큰 및 사용자 정보
             None: 인증 실패 시
         """
         from app.domains.users.service import UserService
         from app.common.security import verify_password
-        from app.common.jwt import create_access_token
+        from app.common.jwt import create_access_token, create_refresh_token
 
         user_service = UserService()
 
@@ -169,14 +170,66 @@ class AuthService:
         if not verify_password(login_data.password, user.hashed_password):
             return None
 
-        # 3. 액세스 토큰 생성
-        access_token = create_access_token(
-            data={"user_id": user.id, "email": user.email}
+        # 3. 토큰 데이터 준비
+        token_data = {"user_id": user.id, "email": user.email}
+
+        # 4. 액세스 토큰 생성
+        access_token = create_access_token(data=token_data)
+
+        # 5. 리프레시 토큰 생성
+        refresh_token = create_refresh_token(data=token_data)
+
+        # 6. 로그인 응답 반환
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            user_id=user.id,
         )
 
-        # 4. 로그인 응답 반환
-        return LoginResponse(
-            access_token=access_token, token_type="bearer", user_id=user.id
+    def refresh_tokens(
+        self, db: Session, refresh_token: str
+    ) -> Optional[RefreshTokenResponse]:
+        """
+        리프레시 토큰을 사용하여 새로운 액세스 토큰과 리프레시 토큰 발급
+
+        Args:
+            db: 데이터베이스 세션
+            refresh_token: 리프레시 토큰
+
+        Returns:
+            RefreshTokenResponse: 새로운 액세스 토큰과 리프레시 토큰
+            None: 리프레시 토큰이 유효하지 않은 경우
+        """
+        from app.domains.users.service import UserService
+        from app.common.jwt import (
+            verify_refresh_token,
+            create_access_token,
+            create_refresh_token,
+        )
+
+        # 1. 리프레시 토큰 검증
+        token_data = verify_refresh_token(refresh_token)
+        if not token_data:
+            return None
+
+        # 2. 사용자 존재 여부 확인
+        user_service = UserService()
+        user = user_service.get_user_by_id(db, token_data.user_id)
+        if not user or not user.is_active:
+            return None
+
+        # 3. 토큰 데이터 준비
+        new_token_data = {"user_id": user.id, "email": user.email}
+
+        # 4. 새로운 토큰 생성
+        new_access_token = create_access_token(data=new_token_data)
+        new_refresh_token = create_refresh_token(data=new_token_data)
+
+        return RefreshTokenResponse(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer",
         )
 
     def get_current_user_from_token(self, token: str) -> Optional[TokenData]:
