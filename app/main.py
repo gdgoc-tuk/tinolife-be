@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -98,6 +100,11 @@ def create_app() -> FastAPI:
     app.include_router(majors_router, prefix="/api/v1")
     app.include_router(interests_router, prefix="/api/v1")
     app.include_router(qna_router, prefix="/api/v1")
+
+    # 정적 파일 서빙 (업로드된 이미지)
+    uploads_dir = Path(settings.UPLOAD_DIR)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     # 기본 엔드포인트
     @app.get("/")

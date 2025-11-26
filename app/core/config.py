@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     # 공공데이터 API 설정
     PUBLIC_DATA_API_KEY: str = ""
 
+    # 이미지 업로드 설정
+    UPLOAD_DIR: str = "uploads"  # 로컬 업로드 디렉토리
+    MAX_IMAGE_SIZE: int = 5 * 1024 * 1024  # 5MB
+    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    
+    # S3 설정 (선택적)
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_S3_BUCKET: str = ""
+    AWS_S3_REGION: str = "ap-northeast-2"
+    USE_S3: bool = False  # True면 S3 사용, False면 로컬 저장
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

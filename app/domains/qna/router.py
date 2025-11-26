@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+from fastapi import APIRouter, HTTPException, status, Query, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -29,6 +29,7 @@ from app.domains.qna.schema import (
     SearchResponse,
     ReportCreate,
     ReportResponse,
+    ImageUploadResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
@@ -51,6 +52,7 @@ from app.domains.qna.service import (
     get_report_service,
 )
 from app.common.dependencies import get_current_user
+from app.common.image_upload import ImageUploader, get_image_uploader
 from app.domains.users.model import User
 
 router = APIRouter(prefix="/qna", tags=["qna"])
@@ -686,3 +688,36 @@ async def report_answer(
         db, answer_id, current_user.id, report_data.reason, report_data.description
     )
     return ReportResponse(**result)
+
+
+@router.post("/images/upload", response_model=ImageUploadResponse)
+async def upload_image(
+    file: UploadFile = File(..., description="업로드할 이미지 파일"),
+    image_type: str = Query("question", description="이미지 타입 (question, answer)"),
+    current_user: User = Depends(get_current_user),
+    uploader: ImageUploader = Depends(get_image_uploader),
+):
+    """
+    이미지 업로드
+    
+    질문 또는 답변 본문에 삽입할 이미지를 업로드합니다.
+    
+    - **file**: 이미지 파일 (JPEG, PNG, GIF, WebP)
+    - **image_type**: 이미지 용도 (question 또는 answer)
+    - 최대 파일 크기: 5MB
+    
+    업로드 후 반환된 image_url을 본문에 삽입하여 사용합니다.
+    """
+    # prefix 설정
+    prefix = f"qna/{image_type}s"
+    
+    # 이미지 업로드
+    image_url, image_key, file_size, mime_type = await uploader.upload(file, prefix)
+    
+    return ImageUploadResponse(
+        image_url=image_url,
+        image_key=image_key,
+        file_size=file_size,
+        mime_type=mime_type,
+        message="이미지가 성공적으로 업로드되었습니다"
+    )

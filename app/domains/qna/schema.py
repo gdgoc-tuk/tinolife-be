@@ -337,3 +337,12 @@ class ReportResponse(BaseModel):
     message: str
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class ImageUploadResponse(BaseModel):
+    """이미지 업로드 응답 스키마"""
+    image_url: str
+    image_key: str
+    file_size: int
+    mime_type: str
+    message: str
