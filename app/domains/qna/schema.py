@@ -292,3 +292,12 @@ class BookmarkListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SearchResponse(BaseModel):
+    """검색 결과 응답 스키마"""
+    questions: list["QuestionListItem"]
+    total: int
+    page: int
+    page_size: int
+    query: str

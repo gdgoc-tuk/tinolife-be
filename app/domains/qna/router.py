@@ -13,6 +13,7 @@ from app.domains.qna.schema import (
     QuestionUpdate,
     QuestionResponse,
     QuestionListResponse,
+    QuestionListItem,
     AnswerCreate,
     AnswerUpdate,
     AnswerResponse,
@@ -25,6 +26,7 @@ from app.domains.qna.schema import (
     InterestResponse,
     BookmarkResponse,
     BookmarkListResponse,
+    SearchResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
@@ -41,6 +43,8 @@ from app.domains.qna.service import (
     get_interest_service,
     BookmarkService,
     get_bookmark_service,
+    SearchService,
+    get_search_service,
 )
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
@@ -577,3 +581,62 @@ async def get_my_bookmarks(
     """
     result = await service.get_user_bookmarks(db, current_user.id, page, page_size)
     return BookmarkListResponse(**result)
+
+
+@router.get("/search", response_model=SearchResponse)
+async def search_questions(
+    q: str = Query(..., min_length=1, max_length=100, description="검색어"),
+    category_id: int = Query(None, description="카테고리 ID 필터"),
+    major_id: int = Query(None, description="전공 ID 필터"),
+    sort_by: str = Query("recent", description="정렬 기준 (recent, interest, bounty, unanswered)"),
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 크기"),
+    db: Session = Depends(get_db),
+    service: SearchService = Depends(get_search_service),
+):
+    """
+    질문 검색
+    
+    제목, 본문, 태그에서 검색어를 찾습니다.
+    
+    - **q**: 검색어 (필수)
+    - **category_id**: 카테고리 필터 (선택)
+    - **major_id**: 전공 필터 (선택)
+    - **sort_by**: 정렬 기준
+      - recent: 최신순 (기본값)
+      - interest: 관심순
+      - bounty: 바운티 높은 순
+      - unanswered: 답변 대기순
+    - **page**: 페이지 번호 (기본값: 1)
+    - **page_size**: 페이지 크기 (기본값: 20, 최대: 100)
+    """
+    result = await service.search_questions(
+        db, q, category_id, major_id, sort_by, page, page_size
+    )
+    
+    # QuestionListItem으로 변환
+    question_items = [
+        QuestionListItem(
+            id=q.id,
+            title=q.title,
+            category=q.category,
+            major={"id": q.major.id, "name": q.major.name} if q.major else None,
+            tags=q.tags,
+            bounty=q.bounty,
+            view_count=q.view_count,
+            interest_count=q.interest_count,
+            answer_count=q.answer_count,
+            is_anonymous=q.is_anonymous,
+            accepted_answer_id=q.accepted_answer_id,
+            created_at=q.created_at
+        )
+        for q in result["questions"]
+    ]
+    
+    return SearchResponse(
+        questions=question_items,
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        query=result["query"]
+    )

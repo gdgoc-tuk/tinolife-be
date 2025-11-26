@@ -1290,6 +1290,110 @@ class BookmarkService:
         ).first() is not None
 
 
+class SearchService:
+    """검색 비즈니스 로직을 처리하는 서비스"""
+    
+    async def search_questions(
+        self,
+        db: Session,
+        query: str,
+        category_id: Optional[int] = None,
+        major_id: Optional[int] = None,
+        sort_by: str = "recent",
+        page: int = 1,
+        page_size: int = 20
+    ) -> dict:
+        """
+        질문 검색 (제목, 본문, 태그)
+        
+        Args:
+            db: 데이터베이스 세션
+            query: 검색어
+            category_id: 카테고리 필터
+            major_id: 전공 필터
+            sort_by: 정렬 기준 (recent, interest, bounty, unanswered)
+            page: 페이지 번호
+            page_size: 페이지 크기
+            
+        Returns:
+            검색 결과와 페이지네이션 정보
+        """
+        search_term = f"%{query}%"
+        
+        # 기본 쿼리: 삭제되지 않은 질문
+        base_query = db.query(Question).filter(Question.is_deleted == False)
+        
+        # 제목, 본문 검색
+        title_content_query = base_query.filter(
+            (Question.title.ilike(search_term)) | 
+            (Question.content.ilike(search_term))
+        )
+        
+        # 태그로 검색된 질문 ID들
+        tag_question_ids = db.query(question_tags.c.question_id).join(
+            Tag, Tag.id == question_tags.c.tag_id
+        ).filter(
+            Tag.name.ilike(search_term),
+            Tag.is_active == True
+        ).subquery()
+        
+        # 태그 검색 쿼리
+        tag_query = base_query.filter(Question.id.in_(tag_question_ids))
+        
+        # 제목/본문 검색과 태그 검색 합치기 (UNION)
+        from sqlalchemy import union
+        
+        # 두 쿼리의 결과를 합침
+        combined_ids = db.query(Question.id).filter(
+            Question.is_deleted == False,
+            (
+                (Question.title.ilike(search_term)) | 
+                (Question.content.ilike(search_term)) |
+                (Question.id.in_(tag_question_ids))
+            )
+        )
+        
+        # 필터 적용
+        if category_id:
+            combined_ids = combined_ids.filter(Question.category_id == category_id)
+        
+        if major_id:
+            combined_ids = combined_ids.filter(Question.major_id == major_id)
+        
+        # 전체 개수
+        total = combined_ids.count()
+        
+        # 실제 질문 조회를 위한 쿼리
+        result_query = db.query(Question).filter(
+            Question.id.in_(combined_ids.subquery())
+        ).options(
+            joinedload(Question.category),
+            joinedload(Question.major),
+            joinedload(Question.tags)
+        )
+        
+        # 정렬
+        if sort_by == "interest":
+            result_query = result_query.order_by(desc(Question.interest_count), desc(Question.created_at))
+        elif sort_by == "bounty":
+            result_query = result_query.order_by(desc(Question.bounty), desc(Question.created_at))
+        elif sort_by == "unanswered":
+            result_query = result_query.order_by(Question.answer_count, desc(Question.created_at))
+        else:  # recent
+            result_query = result_query.order_by(desc(Question.created_at))
+        
+        # 페이지네이션
+        questions = result_query.offset((page - 1) * page_size).limit(page_size).all()
+        
+        return {
+            "questions": questions,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "query": query
+        }
+
+
 def get_category_service() -> CategoryService:
     """CategoryService 인스턴스 반환"""
     return CategoryService()
@@ -1323,3 +1427,8 @@ def get_interest_service() -> InterestService:
 def get_bookmark_service() -> BookmarkService:
     """BookmarkService 인스턴스 반환"""
     return BookmarkService()
+
+
+def get_search_service() -> SearchService:
+    """SearchService 인스턴스 반환"""
+    return SearchService()
