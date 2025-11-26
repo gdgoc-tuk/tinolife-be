@@ -16,6 +16,7 @@ class SignupRequest(BaseModel):
     email: EmailStr = Field(..., description="대학 이메일")
     password: str = Field(..., min_length=8, max_length=100, description="비밀번호")
     nickname: str = Field(..., min_length=2, max_length=20, description="닉네임")
+    student_id: str = Field(..., min_length=1, max_length=20, description="학번")
     grade: int = Field(..., ge=1, le=4, description="학년 (1-4)")
     major_id: int = Field(..., description="전공 ID")
     interest_ids: Optional[List[int]] = Field(
@@ -39,6 +40,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     hashed_password: str
     nickname: str
+    student_id: str
     grade: int
     major_id: int
     is_email_verified: bool = True

@@ -62,6 +62,7 @@ class UserService:
             email=user_data.email,
             hashed_password=user_data.hashed_password,
             nickname=user_data.nickname,
+            student_id=user_data.student_id,
             grade=user_data.grade,
             major_id=user_data.major_id,
             is_email_verified=user_data.is_email_verified,
@@ -109,6 +110,7 @@ class UserService:
             email=signup_data.email,
             hashed_password=hashed_password,
             nickname=signup_data.nickname,
+            student_id=signup_data.student_id,
             grade=signup_data.grade,
             major_id=signup_data.major_id,
             is_email_verified=True,  # 이메일 인증 완료 상태로 가정

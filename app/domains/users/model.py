@@ -20,6 +20,9 @@ class User(Base):
     nickname = Column(
         String(50), unique=True, index=True, nullable=False, comment="닉네임"
     )
+    student_id = Column(
+        String(20), nullable=False, comment="학번"
+    )
     grade = Column(Integer, nullable=True, comment="학년 (1-4)")
     major_id = Column(
         Integer, ForeignKey("majors.id"), nullable=True, comment="전공 ID"
