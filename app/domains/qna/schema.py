@@ -175,3 +175,88 @@ class QuestionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AnswerCreate(BaseModel):
+    """답변 생성 스키마"""
+    content: str = Field(..., min_length=1, description="답변 내용")
+    is_anonymous: bool = Field(default=False, description="익명 여부")
+
+
+class AnswerUpdate(BaseModel):
+    """답변 수정 스키마"""
+    content: Optional[str] = Field(None, min_length=1, description="답변 내용")
+    is_anonymous: Optional[bool] = Field(None, description="익명 여부")
+
+
+class AnswerAuthorResponse(BaseModel):
+    """답변 작성자 응답 스키마"""
+    id: int
+    nickname: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnswerResponse(BaseModel):
+    """답변 응답 스키마"""
+    id: int
+    question_id: int
+    user_id: int
+    content: str
+    is_anonymous: bool
+    like_count: int
+    dislike_count: int
+    is_accepted: bool
+    is_hidden: bool
+    is_deleted: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnswerListResponse(BaseModel):
+    """답변 목록 응답 스키마"""
+    answers: list[AnswerResponse]
+    total: int
+
+
+class AnswerVoteRequest(BaseModel):
+    """답변 투표 요청 스키마"""
+    vote_type: str = Field(..., description="투표 타입 (like/dislike)")
+    
+    @field_validator('vote_type')
+    @classmethod
+    def validate_vote_type(cls, v: str) -> str:
+        if v not in ['like', 'dislike']:
+            raise ValueError("투표 타입은 'like' 또는 'dislike'여야 합니다")
+        return v
+
+
+class AnswerCommentCreate(BaseModel):
+    """답변 댓글 생성 스키마"""
+    content: str = Field(..., min_length=1, max_length=500, description="댓글 내용")
+
+
+class AnswerCommentUpdate(BaseModel):
+    """답변 댓글 수정 스키마"""
+    content: str = Field(..., min_length=1, max_length=500, description="댓글 내용")
+
+
+class AnswerCommentResponse(BaseModel):
+    """답변 댓글 응답 스키마"""
+    id: int
+    answer_id: int
+    user_id: int
+    content: str
+    is_deleted: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnswerCommentListResponse(BaseModel):
+    """답변 댓글 목록 응답 스키마"""
+    comments: list[AnswerCommentResponse]
+    total: int

@@ -1,9 +1,13 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc
+from datetime import datetime
 
-from app.domains.qna.model import Category, Tag, Question, question_tags
-from app.domains.qna.schema import CategoryCreate, CategoryUpdate, QuestionCreate, QuestionUpdate
+from app.domains.qna.model import Category, Tag, Question, Answer, AnswerVote, AnswerComment, question_tags
+from app.domains.qna.schema import (
+    CategoryCreate, CategoryUpdate, QuestionCreate, QuestionUpdate,
+    AnswerCreate, AnswerUpdate, AnswerCommentCreate, AnswerCommentUpdate
+)
 from app.common.exceptions import BadRequestException, NotFoundException
 
 
@@ -610,6 +614,460 @@ class QuestionService:
         db.commit()
 
 
+class AnswerService:
+    """답변 비즈니스 로직을 처리하는 서비스"""
+    
+    async def create_answer(
+        self,
+        db: Session,
+        question_id: int,
+        answer_data: AnswerCreate,
+        user_id: int
+    ) -> Answer:
+        """
+        답변 생성
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            answer_data: 답변 생성 데이터
+            user_id: 작성자 ID
+            
+        Returns:
+            생성된 답변
+        """
+        from app.domains.users.token_service import TokenService
+        from app.domains.users.tino_transaction import TransactionType
+        
+        question = db.query(Question).filter(Question.id == question_id).first()
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        if question.is_deleted or question.is_hidden:
+            raise BadRequestException("삭제되거나 숨겨진 질문에는 답변할 수 없습니다")
+        
+        if question.accepted_answer_id:
+            raise BadRequestException("이미 채택된 질문에는 답변할 수 없습니다")
+        
+        answer = Answer(
+            question_id=question_id,
+            user_id=user_id,
+            content=answer_data.content,
+            is_anonymous=answer_data.is_anonymous,
+        )
+        
+        db.add(answer)
+        
+        question.answer_count += 1
+        
+        db.flush()
+        
+        token_service = TokenService()
+        await token_service.charge_token(
+            db=db,
+            user_id=user_id,
+            amount=2,
+            transaction_type=TransactionType.ANSWER_REWARD,
+            description="답변 등록 보상",
+            question_id=question_id,
+            answer_id=answer.id
+        )
+        
+        db.commit()
+        db.refresh(answer)
+        
+        return answer
+    
+    async def get_answers(
+        self,
+        db: Session,
+        question_id: int,
+        skip: int = 0,
+        limit: int = 50
+    ) -> tuple[List[Answer], int]:
+        """
+        질문에 대한 답변 목록 조회
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            skip: 건너뛸 항목 수
+            limit: 조회할 항목 수
+            
+        Returns:
+            (답변 목록, 전체 개수)
+        """
+        query = db.query(Answer).filter(
+            Answer.question_id == question_id,
+            Answer.is_deleted == False,
+            Answer.is_hidden == False
+        )
+        
+        total = query.count()
+        
+        answers = query.order_by(desc(Answer.like_count), Answer.created_at)\
+                      .offset(skip)\
+                      .limit(limit)\
+                      .all()
+        
+        return answers, total
+    
+    async def get_answer_by_id(self, db: Session, answer_id: int) -> Optional[Answer]:
+        """답변 ID로 조회"""
+        return db.query(Answer).filter(Answer.id == answer_id).first()
+    
+    async def update_answer(
+        self,
+        db: Session,
+        answer_id: int,
+        answer_data: AnswerUpdate,
+        user_id: int
+    ) -> Answer:
+        """
+        답변 수정
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            answer_data: 수정 데이터
+            user_id: 요청한 사용자 ID
+            
+        Returns:
+            수정된 답변
+        """
+        answer = await self.get_answer_by_id(db, answer_id)
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        if answer.user_id != user_id:
+            raise BadRequestException("자신의 답변만 수정할 수 있습니다")
+        
+        if answer.is_accepted:
+            raise BadRequestException("채택된 답변은 수정할 수 없습니다")
+        
+        if answer_data.content is not None:
+            answer.content = answer_data.content
+        
+        if answer_data.is_anonymous is not None:
+            answer.is_anonymous = answer_data.is_anonymous
+        
+        db.commit()
+        db.refresh(answer)
+        
+        return answer
+    
+    async def delete_answer(
+        self,
+        db: Session,
+        answer_id: int,
+        user_id: int
+    ) -> None:
+        """
+        답변 삭제 (소프트 삭제)
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            user_id: 요청한 사용자 ID
+        """
+        answer = await self.get_answer_by_id(db, answer_id)
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        if answer.user_id != user_id:
+            raise BadRequestException("자신의 답변만 삭제할 수 있습니다")
+        
+        if answer.is_accepted:
+            raise BadRequestException("채택된 답변은 삭제할 수 없습니다")
+        
+        answer.is_deleted = True
+        
+        question = db.query(Question).filter(Question.id == answer.question_id).first()
+        if question:
+            question.answer_count = max(0, question.answer_count - 1)
+        
+        db.commit()
+    
+    async def vote_answer(
+        self,
+        db: Session,
+        answer_id: int,
+        user_id: int,
+        vote_type: str
+    ) -> Answer:
+        """
+        답변에 좋아요/싫어요 투표
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            user_id: 투표한 사용자 ID
+            vote_type: 투표 타입 (like/dislike)
+            
+        Returns:
+            업데이트된 답변
+        """
+        answer = await self.get_answer_by_id(db, answer_id)
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        if answer.user_id == user_id:
+            raise BadRequestException("자신의 답변에는 투표할 수 없습니다")
+        
+        existing_vote = db.query(AnswerVote).filter(
+            AnswerVote.answer_id == answer_id,
+            AnswerVote.user_id == user_id
+        ).first()
+        
+        is_like = vote_type == "like"
+        current_vote_type = "LIKE" if is_like else "DISLIKE"
+        
+        if existing_vote:
+            existing_is_like = existing_vote.vote_type == "LIKE"
+            if existing_is_like == is_like:
+                # 같은 투표 취소
+                db.delete(existing_vote)
+                if is_like:
+                    answer.like_count = max(0, answer.like_count - 1)
+                else:
+                    answer.dislike_count = max(0, answer.dislike_count - 1)
+            else:
+                # 투표 변경
+                if existing_is_like:
+                    answer.like_count = max(0, answer.like_count - 1)
+                    answer.dislike_count += 1
+                else:
+                    answer.dislike_count = max(0, answer.dislike_count - 1)
+                    answer.like_count += 1
+                existing_vote.vote_type = current_vote_type
+        else:
+            new_vote = AnswerVote(
+                answer_id=answer_id,
+                user_id=user_id,
+                vote_type=current_vote_type
+            )
+            db.add(new_vote)
+            if is_like:
+                answer.like_count += 1
+            else:
+                answer.dislike_count += 1
+        
+        # 좋아요 5개 달성 시 보상 (최초 1회)
+        if is_like and answer.like_count == 5:
+            from app.domains.users.token_service import TokenService
+            from app.domains.users.tino_transaction import TransactionType, TinoTransaction
+            
+            existing_bonus = db.query(TinoTransaction).filter(
+                TinoTransaction.answer_id == answer_id,
+                TinoTransaction.transaction_type == TransactionType.ANSWER_LIKE_BONUS
+            ).first()
+            
+            if not existing_bonus:
+                token_service = TokenService()
+                await token_service.charge_token(
+                    db=db,
+                    user_id=answer.user_id,
+                    amount=3,
+                    transaction_type=TransactionType.ANSWER_LIKE_BONUS,
+                    description="답변 좋아요 5개 달성 보상",
+                    answer_id=answer_id
+                )
+        
+        db.commit()
+        db.refresh(answer)
+        
+        return answer
+    
+    async def accept_answer(
+        self,
+        db: Session,
+        question_id: int,
+        answer_id: int,
+        user_id: int
+    ) -> Question:
+        """
+        답변 채택
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            answer_id: 채택할 답변 ID
+            user_id: 요청한 사용자 ID (질문 작성자)
+            
+        Returns:
+            업데이트된 질문
+        """
+        from app.domains.users.token_service import TokenService
+        from app.domains.users.tino_transaction import TransactionType
+        
+        question = db.query(Question).filter(Question.id == question_id).first()
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        if question.user_id != user_id:
+            raise BadRequestException("자신의 질문에 대한 답변만 채택할 수 있습니다")
+        
+        if question.accepted_answer_id:
+            raise BadRequestException("이미 채택된 답변이 있습니다")
+        
+        answer = await self.get_answer_by_id(db, answer_id)
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        if answer.question_id != question_id:
+            raise BadRequestException("해당 질문의 답변이 아닙니다")
+        
+        if answer.is_deleted or answer.is_hidden:
+            raise BadRequestException("삭제되거나 숨겨진 답변은 채택할 수 없습니다")
+        
+        question.accepted_answer_id = answer_id
+        question.accepted_at = datetime.utcnow()
+        answer.is_accepted = True
+        
+        token_service = TokenService()
+        
+        # 채택 보상: 10 TINO + 바운티
+        reward_amount = 10 + question.bounty
+        await token_service.charge_token(
+            db=db,
+            user_id=answer.user_id,
+            amount=reward_amount,
+            transaction_type=TransactionType.ANSWER_ACCEPTED,
+            description=f"답변 채택 보상 (기본 10 + 바운티 {question.bounty})",
+            question_id=question_id,
+            answer_id=answer_id
+        )
+        
+        db.commit()
+        db.refresh(question)
+        
+        return question
+
+
+class AnswerCommentService:
+    """답변 댓글 비즈니스 로직을 처리하는 서비스"""
+    
+    async def create_comment(
+        self,
+        db: Session,
+        answer_id: int,
+        comment_data: AnswerCommentCreate,
+        user_id: int
+    ) -> AnswerComment:
+        """
+        답변 댓글 생성
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            comment_data: 댓글 생성 데이터
+            user_id: 작성자 ID
+            
+        Returns:
+            생성된 댓글
+        """
+        answer = db.query(Answer).filter(Answer.id == answer_id).first()
+        if not answer:
+            raise NotFoundException(f"답변을 찾을 수 없습니다: {answer_id}")
+        
+        if answer.is_deleted or answer.is_hidden:
+            raise BadRequestException("삭제되거나 숨겨진 답변에는 댓글을 달 수 없습니다")
+        
+        comment = AnswerComment(
+            answer_id=answer_id,
+            user_id=user_id,
+            content=comment_data.content
+        )
+        
+        db.add(comment)
+        db.commit()
+        db.refresh(comment)
+        
+        return comment
+    
+    async def get_comments(
+        self,
+        db: Session,
+        answer_id: int
+    ) -> tuple[List[AnswerComment], int]:
+        """
+        답변의 댓글 목록 조회
+        
+        Args:
+            db: 데이터베이스 세션
+            answer_id: 답변 ID
+            
+        Returns:
+            (댓글 목록, 전체 개수)
+        """
+        query = db.query(AnswerComment).filter(
+            AnswerComment.answer_id == answer_id,
+            AnswerComment.is_deleted == False
+        )
+        
+        total = query.count()
+        comments = query.order_by(AnswerComment.created_at).all()
+        
+        return comments, total
+    
+    async def update_comment(
+        self,
+        db: Session,
+        comment_id: int,
+        comment_data: AnswerCommentUpdate,
+        user_id: int
+    ) -> AnswerComment:
+        """
+        댓글 수정
+        
+        Args:
+            db: 데이터베이스 세션
+            comment_id: 댓글 ID
+            comment_data: 수정 데이터
+            user_id: 요청한 사용자 ID
+            
+        Returns:
+            수정된 댓글
+        """
+        comment = db.query(AnswerComment).filter(AnswerComment.id == comment_id).first()
+        if not comment:
+            raise NotFoundException(f"댓글을 찾을 수 없습니다: {comment_id}")
+        
+        if comment.user_id != user_id:
+            raise BadRequestException("자신의 댓글만 수정할 수 있습니다")
+        
+        comment.content = comment_data.content
+        
+        db.commit()
+        db.refresh(comment)
+        
+        return comment
+    
+    async def delete_comment(
+        self,
+        db: Session,
+        comment_id: int,
+        user_id: int
+    ) -> None:
+        """
+        댓글 삭제 (소프트 삭제)
+        
+        Args:
+            db: 데이터베이스 세션
+            comment_id: 댓글 ID
+            user_id: 요청한 사용자 ID
+        """
+        comment = db.query(AnswerComment).filter(AnswerComment.id == comment_id).first()
+        if not comment:
+            raise NotFoundException(f"댓글을 찾을 수 없습니다: {comment_id}")
+        
+        if comment.user_id != user_id:
+            raise BadRequestException("자신의 댓글만 삭제할 수 있습니다")
+        
+        comment.is_deleted = True
+        db.commit()
+
+
 def get_category_service() -> CategoryService:
     """CategoryService 인스턴스 반환"""
     return CategoryService()
@@ -623,3 +1081,13 @@ def get_tag_service() -> TagService:
 def get_question_service() -> QuestionService:
     """QuestionService 인스턴스 반환"""
     return QuestionService()
+
+
+def get_answer_service() -> AnswerService:
+    """AnswerService 인스턴스 반환"""
+    return AnswerService()
+
+
+def get_answer_comment_service() -> AnswerCommentService:
+    """AnswerCommentService 인스턴스 반환"""
+    return AnswerCommentService()

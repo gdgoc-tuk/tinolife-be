@@ -13,6 +13,15 @@ from app.domains.qna.schema import (
     QuestionUpdate,
     QuestionResponse,
     QuestionListResponse,
+    AnswerCreate,
+    AnswerUpdate,
+    AnswerResponse,
+    AnswerListResponse,
+    AnswerVoteRequest,
+    AnswerCommentCreate,
+    AnswerCommentUpdate,
+    AnswerCommentResponse,
+    AnswerCommentListResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
@@ -21,6 +30,10 @@ from app.domains.qna.service import (
     get_tag_service,
     QuestionService,
     get_question_service,
+    AnswerService,
+    get_answer_service,
+    AnswerCommentService,
+    get_answer_comment_service,
 )
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
@@ -318,4 +331,189 @@ async def delete_question(
     - 답변이 있는 질문은 삭제 불가
     """
     await service.delete_question(db, question_id, current_user.id)
+    return None
+
+
+@router.post("/questions/{question_id}/answers", response_model=AnswerResponse, status_code=status.HTTP_201_CREATED)
+async def create_answer(
+    question_id: int,
+    answer_data: AnswerCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    답변 생성
+    
+    - **question_id**: 질문 ID
+    - **content**: 답변 내용
+    - **is_anonymous**: 익명 여부 (기본값: false)
+    - 답변 등록 시 2 TINO 보상 지급
+    """
+    answer = await service.create_answer(db, question_id, answer_data, current_user.id)
+    return answer
+
+
+@router.get("/questions/{question_id}/answers", response_model=AnswerListResponse)
+async def get_answers(
+    question_id: int,
+    skip: int = Query(0, ge=0, description="건너뛸 항목 수"),
+    limit: int = Query(50, ge=1, le=100, description="조회할 항목 수"),
+    db: Session = Depends(get_db),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    질문에 대한 답변 목록 조회
+    
+    - **question_id**: 질문 ID
+    - **skip**: 건너뛸 항목 수
+    - **limit**: 조회할 항목 수 (최대 100)
+    """
+    answers, total = await service.get_answers(db, question_id, skip=skip, limit=limit)
+    return AnswerListResponse(answers=answers, total=total)
+
+
+@router.put("/answers/{answer_id}", response_model=AnswerResponse)
+async def update_answer(
+    answer_id: int,
+    answer_data: AnswerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    답변 수정
+    
+    - **answer_id**: 답변 ID
+    - 작성자 본인만 수정 가능
+    - 채택된 답변은 수정 불가
+    """
+    answer = await service.update_answer(db, answer_id, answer_data, current_user.id)
+    return answer
+
+
+@router.delete("/answers/{answer_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_answer(
+    answer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    답변 삭제 (소프트 삭제)
+    
+    - **answer_id**: 답변 ID
+    - 작성자 본인만 삭제 가능
+    - 채택된 답변은 삭제 불가
+    """
+    await service.delete_answer(db, answer_id, current_user.id)
+    return None
+
+
+@router.post("/answers/{answer_id}/vote", response_model=AnswerResponse)
+async def vote_answer(
+    answer_id: int,
+    vote_data: AnswerVoteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    답변에 좋아요/싫어요 투표
+    
+    - **answer_id**: 답변 ID
+    - **vote_type**: "like" 또는 "dislike"
+    - 동일한 투표를 다시 하면 투표 취소
+    - 좋아요 5개 달성 시 답변 작성자에게 3 TINO 보상
+    """
+    answer = await service.vote_answer(db, answer_id, current_user.id, vote_data.vote_type)
+    return answer
+
+
+@router.post("/questions/{question_id}/accept/{answer_id}", response_model=QuestionResponse)
+async def accept_answer(
+    question_id: int,
+    answer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerService = Depends(get_answer_service),
+):
+    """
+    답변 채택
+    
+    - **question_id**: 질문 ID
+    - **answer_id**: 채택할 답변 ID
+    - 질문 작성자만 채택 가능
+    - 한 번 채택하면 변경 불가
+    - 채택 시 답변 작성자에게 10 TINO + 바운티 지급
+    """
+    question = await service.accept_answer(db, question_id, answer_id, current_user.id)
+    return question
+
+
+@router.post("/answers/{answer_id}/comments", response_model=AnswerCommentResponse, status_code=status.HTTP_201_CREATED)
+async def create_answer_comment(
+    answer_id: int,
+    comment_data: AnswerCommentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerCommentService = Depends(get_answer_comment_service),
+):
+    """
+    답변 댓글 생성
+    
+    - **answer_id**: 답변 ID
+    - **content**: 댓글 내용 (최대 500자)
+    """
+    comment = await service.create_comment(db, answer_id, comment_data, current_user.id)
+    return comment
+
+
+@router.get("/answers/{answer_id}/comments", response_model=AnswerCommentListResponse)
+async def get_answer_comments(
+    answer_id: int,
+    db: Session = Depends(get_db),
+    service: AnswerCommentService = Depends(get_answer_comment_service),
+):
+    """
+    답변 댓글 목록 조회
+    
+    - **answer_id**: 답변 ID
+    """
+    comments, total = await service.get_comments(db, answer_id)
+    return AnswerCommentListResponse(comments=comments, total=total)
+
+
+@router.put("/comments/{comment_id}", response_model=AnswerCommentResponse)
+async def update_answer_comment(
+    comment_id: int,
+    comment_data: AnswerCommentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerCommentService = Depends(get_answer_comment_service),
+):
+    """
+    답변 댓글 수정
+    
+    - **comment_id**: 댓글 ID
+    - 작성자 본인만 수정 가능
+    """
+    comment = await service.update_comment(db, comment_id, comment_data, current_user.id)
+    return comment
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_answer_comment(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: AnswerCommentService = Depends(get_answer_comment_service),
+):
+    """
+    답변 댓글 삭제 (소프트 삭제)
+    
+    - **comment_id**: 댓글 ID
+    - 작성자 본인만 삭제 가능
+    """
+    await service.delete_comment(db, comment_id, current_user.id)
     return None
