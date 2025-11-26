@@ -9,12 +9,18 @@ from app.domains.qna.schema import (
     CategoryListResponse,
     TagListResponse,
     TagSearchResponse,
+    QuestionCreate,
+    QuestionUpdate,
+    QuestionResponse,
+    QuestionListResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
     get_category_service,
     TagService,
     get_tag_service,
+    QuestionService,
+    get_question_service,
 )
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
@@ -181,3 +187,135 @@ async def search_tags(
     """
     tags = await service.search_tags(db, q, limit)
     return TagSearchResponse(tags=tags)
+
+
+@router.post("/questions", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
+async def create_question(
+    question_data: QuestionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: QuestionService = Depends(get_question_service),
+):
+    """
+    질문 생성
+    
+    - **title**: 질문 제목 (1-200자)
+    - **content**: 질문 본문
+    - **category_id**: 카테고리 ID (필수)
+    - **major_id**: 전공 ID (선택, null=전공무관)
+    - **bounty**: 바운티 토큰 (기본값: 0)
+    - **is_anonymous**: 익명 여부 (기본값: false)
+    - **tag_names**: 태그명 리스트 (최대 10개)
+    """
+    question = await service.create_question(db, question_data, current_user.id)
+    return question
+
+
+@router.get("/questions", response_model=QuestionListResponse)
+async def get_questions(
+    skip: int = Query(0, ge=0, description="건너뛸 항목 수"),
+    limit: int = Query(20, ge=1, le=100, description="조회할 항목 수"),
+    category_id: int = Query(None, description="카테고리 필터"),
+    major_id: int = Query(None, description="전공 필터"),
+    tag_name: str = Query(None, description="태그 필터"),
+    sort_by: str = Query("recent", description="정렬 기준 (recent, interest, bounty, unanswered)"),
+    db: Session = Depends(get_db),
+    service: QuestionService = Depends(get_question_service),
+):
+    """
+    질문 목록 조회
+    
+    - **skip**: 건너뛸 항목 수
+    - **limit**: 조회할 항목 수 (최대 100)
+    - **category_id**: 카테고리 필터
+    - **major_id**: 전공 필터
+    - **tag_name**: 태그 필터
+    - **sort_by**: 정렬 기준
+      - recent: 최신순 (기본값)
+      - interest: 관심순
+      - bounty: 바운티 높은 순
+      - unanswered: 답변 대기 순
+    """
+    questions, total = await service.get_questions(
+        db,
+        skip=skip,
+        limit=limit,
+        category_id=category_id,
+        major_id=major_id,
+        tag_name=tag_name,
+        sort_by=sort_by,
+    )
+    
+    page = skip // limit + 1 if limit > 0 else 1
+    
+    return QuestionListResponse(
+        questions=questions,
+        total=total,
+        page=page,
+        page_size=limit
+    )
+
+
+@router.get("/questions/{question_id}", response_model=QuestionResponse)
+async def get_question(
+    question_id: int,
+    db: Session = Depends(get_db),
+    service: QuestionService = Depends(get_question_service),
+):
+    """
+    질문 상세 조회
+    
+    - **question_id**: 질문 ID
+    """
+    question = await service.get_question_by_id(db, question_id, increment_view=True)
+    
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"질문을 찾을 수 없습니다: {question_id}"
+        )
+    
+    if question.is_deleted or question.is_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="삭제되었거나 숨겨진 질문입니다"
+        )
+    
+    return question
+
+
+@router.put("/questions/{question_id}", response_model=QuestionResponse)
+async def update_question(
+    question_id: int,
+    question_data: QuestionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: QuestionService = Depends(get_question_service),
+):
+    """
+    질문 수정
+    
+    - **question_id**: 질문 ID
+    - 작성자 본인만 수정 가능
+    - 채택된 질문은 수정 불가
+    """
+    question = await service.update_question(db, question_id, question_data, current_user.id)
+    return question
+
+
+@router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_question(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: QuestionService = Depends(get_question_service),
+):
+    """
+    질문 삭제 (소프트 삭제)
+    
+    - **question_id**: 질문 ID
+    - 작성자 본인만 삭제 가능
+    - 답변이 있는 질문은 삭제 불가
+    """
+    await service.delete_question(db, question_id, current_user.id)
+    return None

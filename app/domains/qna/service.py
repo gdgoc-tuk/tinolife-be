@@ -1,9 +1,9 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, desc
 
-from app.domains.qna.model import Category, Tag
-from app.domains.qna.schema import CategoryCreate, CategoryUpdate
+from app.domains.qna.model import Category, Tag, Question, question_tags
+from app.domains.qna.schema import CategoryCreate, CategoryUpdate, QuestionCreate, QuestionUpdate
 from app.common.exceptions import BadRequestException, NotFoundException
 
 
@@ -314,6 +314,241 @@ class TagService:
         return query.scalar()
 
 
+class QuestionService:
+    """질문 비즈니스 로직을 처리하는 서비스"""
+    
+    def __init__(self):
+        self.tag_service = TagService()
+    
+    async def create_question(
+        self,
+        db: Session,
+        question_data: QuestionCreate,
+        user_id: int
+    ) -> Question:
+        """
+        질문 생성
+        
+        Args:
+            db: 데이터베이스 세션
+            question_data: 질문 생성 데이터
+            user_id: 작성자 ID
+            
+        Returns:
+            생성된 질문
+        """
+        from app.domains.qna.model import Category
+        from app.domains.majors.model import Major
+        
+        category = db.query(Category).filter(Category.id == question_data.category_id).first()
+        if not category or not category.is_active:
+            raise NotFoundException(f"카테고리를 찾을 수 없습니다: {question_data.category_id}")
+        
+        if question_data.major_id:
+            major = db.query(Major).filter(Major.id == question_data.major_id).first()
+            if not major:
+                raise NotFoundException(f"전공을 찾을 수 없습니다: {question_data.major_id}")
+        
+        question = Question(
+            user_id=user_id,
+            title=question_data.title,
+            content=question_data.content,
+            category_id=question_data.category_id,
+            major_id=question_data.major_id,
+            bounty=question_data.bounty,
+            is_anonymous=question_data.is_anonymous,
+        )
+        
+        if question_data.tag_names:
+            for tag_name in question_data.tag_names:
+                tag = await self.tag_service.get_or_create_tag(db, tag_name)
+                question.tags.append(tag)
+        
+        db.add(question)
+        db.commit()
+        db.refresh(question)
+        
+        return question
+    
+    async def get_questions(
+        self,
+        db: Session,
+        skip: int = 0,
+        limit: int = 20,
+        category_id: Optional[int] = None,
+        major_id: Optional[int] = None,
+        tag_name: Optional[str] = None,
+        sort_by: str = "recent"
+    ) -> tuple[List[Question], int]:
+        """
+        질문 목록 조회
+        
+        Args:
+            db: 데이터베이스 세션
+            skip: 건너뛸 항목 수
+            limit: 조회할 항목 수
+            category_id: 카테고리 필터
+            major_id: 전공 필터
+            tag_name: 태그 필터
+            sort_by: 정렬 기준 (recent, interest, bounty, unanswered)
+            
+        Returns:
+            (질문 목록, 전체 개수)
+        """
+        query = db.query(Question).filter(
+            Question.is_deleted == False,
+            Question.is_hidden == False
+        )
+        
+        if category_id:
+            query = query.filter(Question.category_id == category_id)
+        
+        if major_id:
+            query = query.filter(Question.major_id == major_id)
+        
+        if tag_name:
+            query = query.join(Question.tags).filter(Tag.name == tag_name)
+        
+        if sort_by == "interest":
+            query = query.order_by(desc(Question.interest_count))
+        elif sort_by == "bounty":
+            query = query.order_by(desc(Question.bounty))
+        elif sort_by == "unanswered":
+            query = query.order_by(Question.answer_count, desc(Question.created_at))
+        else:
+            query = query.order_by(desc(Question.created_at))
+        
+        total = query.count()
+        
+        questions = query.options(
+            joinedload(Question.category),
+            joinedload(Question.major),
+            joinedload(Question.tags)
+        ).offset(skip).limit(limit).all()
+        
+        return questions, total
+    
+    async def get_question_by_id(
+        self,
+        db: Session,
+        question_id: int,
+        increment_view: bool = False
+    ) -> Optional[Question]:
+        """
+        질문 상세 조회
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            increment_view: 조회수 증가 여부
+            
+        Returns:
+            질문 또는 None
+        """
+        question = db.query(Question).options(
+            joinedload(Question.category),
+            joinedload(Question.major),
+            joinedload(Question.tags)
+        ).filter(Question.id == question_id).first()
+        
+        if question and increment_view:
+            question.view_count += 1
+            db.commit()
+            db.refresh(question)
+        
+        return question
+    
+    async def update_question(
+        self,
+        db: Session,
+        question_id: int,
+        question_data: QuestionUpdate,
+        user_id: int
+    ) -> Question:
+        """
+        질문 수정
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            question_data: 수정 데이터
+            user_id: 요청한 사용자 ID
+            
+        Returns:
+            수정된 질문
+        """
+        question = await self.get_question_by_id(db, question_id)
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        if question.user_id != user_id:
+            raise BadRequestException("자신의 질문만 수정할 수 있습니다")
+        
+        if question.accepted_answer_id:
+            raise BadRequestException("채택된 질문은 수정할 수 없습니다")
+        
+        if question_data.title is not None:
+            question.title = question_data.title
+        
+        if question_data.content is not None:
+            question.content = question_data.content
+        
+        if question_data.category_id is not None:
+            from app.domains.qna.model import Category
+            category = db.query(Category).filter(Category.id == question_data.category_id).first()
+            if not category or not category.is_active:
+                raise NotFoundException(f"카테고리를 찾을 수 없습니다: {question_data.category_id}")
+            question.category_id = question_data.category_id
+        
+        if question_data.major_id is not None:
+            from app.domains.majors.model import Major
+            major = db.query(Major).filter(Major.id == question_data.major_id).first()
+            if not major:
+                raise NotFoundException(f"전공을 찾을 수 없습니다: {question_data.major_id}")
+            question.major_id = question_data.major_id
+        
+        if question_data.is_anonymous is not None:
+            question.is_anonymous = question_data.is_anonymous
+        
+        if question_data.tag_names is not None:
+            question.tags.clear()
+            for tag_name in question_data.tag_names:
+                tag = await self.tag_service.get_or_create_tag(db, tag_name)
+                question.tags.append(tag)
+        
+        db.commit()
+        db.refresh(question)
+        
+        return question
+    
+    async def delete_question(
+        self,
+        db: Session,
+        question_id: int,
+        user_id: int
+    ) -> None:
+        """
+        질문 삭제 (소프트 삭제)
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            user_id: 요청한 사용자 ID
+        """
+        question = await self.get_question_by_id(db, question_id)
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        if question.user_id != user_id:
+            raise BadRequestException("자신의 질문만 삭제할 수 있습니다")
+        
+        if question.answer_count > 0:
+            raise BadRequestException("답변이 있는 질문은 삭제할 수 없습니다")
+        
+        question.is_deleted = True
+        db.commit()
+
+
 def get_category_service() -> CategoryService:
     """CategoryService 인스턴스 반환"""
     return CategoryService()
@@ -322,3 +557,8 @@ def get_category_service() -> CategoryService:
 def get_tag_service() -> TagService:
     """TagService 인스턴스 반환"""
     return TagService()
+
+
+def get_question_service() -> QuestionService:
+    """QuestionService 인스턴스 반환"""
+    return QuestionService()
