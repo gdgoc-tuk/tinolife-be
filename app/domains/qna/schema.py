@@ -6,8 +6,6 @@ from datetime import datetime
 from typing import Optional
 
 
-# ========== Category 스키마 ==========
-
 class CategoryBase(BaseModel):
     """카테고리 기본 스키마"""
     name: str = Field(..., min_length=1, max_length=50, description="카테고리명")
@@ -41,8 +39,6 @@ class CategoryListResponse(BaseModel):
     categories: list[CategoryResponse]
     total: int
 
-
-# ========== Tag 스키마 ==========
 
 class TagBase(BaseModel):
     """태그 기본 스키마"""
@@ -260,3 +256,39 @@ class AnswerCommentListResponse(BaseModel):
     """답변 댓글 목록 응답 스키마"""
     comments: list[AnswerCommentResponse]
     total: int
+
+
+class InterestResponse(BaseModel):
+    """관심 표시 응답 스키마"""
+    question_id: int
+    is_interested: bool
+    interest_count: int
+    message: str
+
+
+class BookmarkResponse(BaseModel):
+    """북마크 응답 스키마"""
+    question_id: int
+    is_bookmarked: bool
+    message: str
+
+
+class BookmarkListItem(BaseModel):
+    """북마크 목록 아이템 스키마"""
+    id: int
+    question_id: int
+    question_title: str
+    question_bounty: int
+    question_answer_count: int
+    question_is_accepted: bool
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BookmarkListResponse(BaseModel):
+    """북마크 목록 응답 스키마"""
+    bookmarks: list[BookmarkListItem]
+    total: int
+    page: int
+    page_size: int

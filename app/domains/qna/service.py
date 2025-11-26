@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc
 from datetime import datetime
 
-from app.domains.qna.model import Category, Tag, Question, Answer, AnswerVote, AnswerComment, question_tags
+from app.domains.qna.model import (
+    Category, Tag, Question, Answer, AnswerVote, AnswerComment, 
+    question_tags, QuestionInterest, QuestionBookmark
+)
 from app.domains.qna.schema import (
     CategoryCreate, CategoryUpdate, QuestionCreate, QuestionUpdate,
     AnswerCreate, AnswerUpdate, AnswerCommentCreate, AnswerCommentUpdate
@@ -1068,6 +1071,225 @@ class AnswerCommentService:
         db.commit()
 
 
+class InterestService:
+    """관심 표시 비즈니스 로직을 처리하는 서비스"""
+    
+    async def toggle_interest(
+        self,
+        db: Session,
+        question_id: int,
+        user_id: int
+    ) -> dict:
+        """
+        질문에 관심 표시 토글
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            user_id: 사용자 ID
+            
+        Returns:
+            관심 표시 결과 (is_interested, interest_count, message)
+        """
+        # 질문 존재 확인
+        question = db.query(Question).filter(
+            Question.id == question_id,
+            Question.is_deleted == False
+        ).first()
+        
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        # 기존 관심 표시 확인
+        existing_interest = db.query(QuestionInterest).filter(
+            QuestionInterest.question_id == question_id,
+            QuestionInterest.user_id == user_id
+        ).first()
+        
+        if existing_interest:
+            # 관심 표시 취소
+            db.delete(existing_interest)
+            question.interest_count = max(0, question.interest_count - 1)
+            db.commit()
+            return {
+                "question_id": question_id,
+                "is_interested": False,
+                "interest_count": question.interest_count,
+                "message": "관심 표시가 취소되었습니다"
+            }
+        else:
+            # 관심 표시 추가
+            new_interest = QuestionInterest(
+                question_id=question_id,
+                user_id=user_id
+            )
+            db.add(new_interest)
+            question.interest_count += 1
+            db.commit()
+            return {
+                "question_id": question_id,
+                "is_interested": True,
+                "interest_count": question.interest_count,
+                "message": "관심 표시가 추가되었습니다"
+            }
+    
+    async def check_interest(
+        self,
+        db: Session,
+        question_id: int,
+        user_id: int
+    ) -> bool:
+        """
+        사용자가 해당 질문에 관심 표시를 했는지 확인
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            user_id: 사용자 ID
+            
+        Returns:
+            관심 표시 여부
+        """
+        return db.query(QuestionInterest).filter(
+            QuestionInterest.question_id == question_id,
+            QuestionInterest.user_id == user_id
+        ).first() is not None
+
+
+class BookmarkService:
+    """북마크 비즈니스 로직을 처리하는 서비스"""
+    
+    async def toggle_bookmark(
+        self,
+        db: Session,
+        question_id: int,
+        user_id: int
+    ) -> dict:
+        """
+        질문 북마크 토글
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            user_id: 사용자 ID
+            
+        Returns:
+            북마크 결과 (is_bookmarked, message)
+        """
+        # 질문 존재 확인
+        question = db.query(Question).filter(
+            Question.id == question_id,
+            Question.is_deleted == False
+        ).first()
+        
+        if not question:
+            raise NotFoundException(f"질문을 찾을 수 없습니다: {question_id}")
+        
+        # 기존 북마크 확인
+        existing_bookmark = db.query(QuestionBookmark).filter(
+            QuestionBookmark.question_id == question_id,
+            QuestionBookmark.user_id == user_id
+        ).first()
+        
+        if existing_bookmark:
+            # 북마크 삭제
+            db.delete(existing_bookmark)
+            db.commit()
+            return {
+                "question_id": question_id,
+                "is_bookmarked": False,
+                "message": "북마크가 삭제되었습니다"
+            }
+        else:
+            # 북마크 추가
+            new_bookmark = QuestionBookmark(
+                question_id=question_id,
+                user_id=user_id
+            )
+            db.add(new_bookmark)
+            db.commit()
+            return {
+                "question_id": question_id,
+                "is_bookmarked": True,
+                "message": "북마크가 추가되었습니다"
+            }
+    
+    async def get_user_bookmarks(
+        self,
+        db: Session,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 20
+    ) -> dict:
+        """
+        사용자의 북마크 목록 조회
+        
+        Args:
+            db: 데이터베이스 세션
+            user_id: 사용자 ID
+            page: 페이지 번호
+            page_size: 페이지 크기
+            
+        Returns:
+            북마크 목록과 페이지네이션 정보
+        """
+        query = db.query(QuestionBookmark).filter(
+            QuestionBookmark.user_id == user_id
+        ).join(Question).filter(
+            Question.is_deleted == False
+        )
+        
+        total = query.count()
+        
+        bookmarks = query.options(
+            joinedload(QuestionBookmark.question)
+        ).order_by(
+            desc(QuestionBookmark.created_at)
+        ).offset((page - 1) * page_size).limit(page_size).all()
+        
+        # 응답 형태로 변환
+        bookmark_items = []
+        for bookmark in bookmarks:
+            bookmark_items.append({
+                "id": bookmark.id,
+                "question_id": bookmark.question_id,
+                "question_title": bookmark.question.title,
+                "question_bounty": bookmark.question.bounty,
+                "question_answer_count": bookmark.question.answer_count,
+                "question_is_accepted": bookmark.question.accepted_answer_id is not None,
+                "created_at": bookmark.created_at
+            })
+        
+        return {
+            "bookmarks": bookmark_items,
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    
+    async def check_bookmark(
+        self,
+        db: Session,
+        question_id: int,
+        user_id: int
+    ) -> bool:
+        """
+        사용자가 해당 질문을 북마크했는지 확인
+        
+        Args:
+            db: 데이터베이스 세션
+            question_id: 질문 ID
+            user_id: 사용자 ID
+            
+        Returns:
+            북마크 여부
+        """
+        return db.query(QuestionBookmark).filter(
+            QuestionBookmark.question_id == question_id,
+            QuestionBookmark.user_id == user_id
+        ).first() is not None
+
+
 def get_category_service() -> CategoryService:
     """CategoryService 인스턴스 반환"""
     return CategoryService()
@@ -1091,3 +1313,13 @@ def get_answer_service() -> AnswerService:
 def get_answer_comment_service() -> AnswerCommentService:
     """AnswerCommentService 인스턴스 반환"""
     return AnswerCommentService()
+
+
+def get_interest_service() -> InterestService:
+    """InterestService 인스턴스 반환"""
+    return InterestService()
+
+
+def get_bookmark_service() -> BookmarkService:
+    """BookmarkService 인스턴스 반환"""
+    return BookmarkService()

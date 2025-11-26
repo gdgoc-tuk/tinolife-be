@@ -22,6 +22,9 @@ from app.domains.qna.schema import (
     AnswerCommentUpdate,
     AnswerCommentResponse,
     AnswerCommentListResponse,
+    InterestResponse,
+    BookmarkResponse,
+    BookmarkListResponse,
 )
 from app.domains.qna.service import (
     CategoryService,
@@ -34,6 +37,10 @@ from app.domains.qna.service import (
     get_answer_service,
     AnswerCommentService,
     get_answer_comment_service,
+    InterestService,
+    get_interest_service,
+    BookmarkService,
+    get_bookmark_service,
 )
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
@@ -517,3 +524,56 @@ async def delete_answer_comment(
     """
     await service.delete_comment(db, comment_id, current_user.id)
     return None
+
+
+@router.post("/questions/{question_id}/interest", response_model=InterestResponse)
+async def toggle_interest(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: InterestService = Depends(get_interest_service),
+):
+    """
+    질문에 관심 표시 토글
+    
+    - **question_id**: 질문 ID
+    - 이미 관심 표시한 경우 취소, 아닌 경우 추가
+    - 관심 표시 수는 추천순 정렬에 활용됩니다
+    """
+    result = await service.toggle_interest(db, question_id, current_user.id)
+    return InterestResponse(**result)
+
+
+@router.post("/questions/{question_id}/bookmark", response_model=BookmarkResponse)
+async def toggle_bookmark(
+    question_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: BookmarkService = Depends(get_bookmark_service),
+):
+    """
+    질문 북마크 토글
+    
+    - **question_id**: 질문 ID
+    - 이미 북마크한 경우 삭제, 아닌 경우 추가
+    """
+    result = await service.toggle_bookmark(db, question_id, current_user.id)
+    return BookmarkResponse(**result)
+
+
+@router.get("/bookmarks", response_model=BookmarkListResponse)
+async def get_my_bookmarks(
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 크기"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    service: BookmarkService = Depends(get_bookmark_service),
+):
+    """
+    내 북마크 목록 조회
+    
+    - **page**: 페이지 번호 (기본값: 1)
+    - **page_size**: 페이지 크기 (기본값: 20, 최대: 100)
+    """
+    result = await service.get_user_bookmarks(db, current_user.id, page, page_size)
+    return BookmarkListResponse(**result)
