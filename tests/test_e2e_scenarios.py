@@ -1667,3 +1667,181 @@ class TestTinoStoryFullScenario:
             item["id"] == story_id 
             for item in list_response.json()["stories"]
         )
+
+
+# =============================================================================
+# Phase 10: 홈 화면 API 테스트
+# =============================================================================
+
+class TestHomeAPI:
+    """홈 화면 API 테스트"""
+    
+    def test_featured_questions_unauthorized(self, client):
+        """주목 질문 - 비로그인 시 401"""
+        response = client.get("/home/featured-questions")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    
+    def test_featured_questions_success(
+        self, client, auth_headers_tino_user, sample_category
+    ):
+        """주목 질문 조회 성공"""
+        # 질문 생성
+        client.post(
+            "/qna/questions",
+            json={
+                "title": "홈 테스트용 질문",
+                "content": "홈 화면에서 보여질 질문입니다.",
+                "category_id": sample_category.id,
+                "bounty": 0
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 주목 질문 조회
+        response = client.get(
+            "/home/featured-questions",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "questions" in data
+        assert "total" in data
+        
+        # 질문이 있으면 reason 필드 확인
+        if data["questions"]:
+            question = data["questions"][0]
+            assert "reason" in question
+            assert "content_preview" in question
+    
+    def test_featured_questions_with_limit(
+        self, client, auth_headers_tino_user
+    ):
+        """주목 질문 - limit 파라미터 테스트"""
+        response = client.get(
+            "/home/featured-questions?limit=3",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.json()["questions"]) <= 3
+    
+    def test_recent_questions_success(
+        self, client, auth_headers_tino_user, sample_category
+    ):
+        """최신 질문 조회 성공"""
+        # 질문 여러 개 생성
+        for i in range(3):
+            client.post(
+                "/qna/questions",
+                json={
+                    "title": f"최신 질문 {i}",
+                    "content": f"내용 {i}",
+                    "category_id": sample_category.id,
+                    "bounty": 0
+                },
+                headers=auth_headers_tino_user
+            )
+        
+        # 최신 질문 조회
+        response = client.get(
+            "/home/recent-questions",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "questions" in data
+        assert "total" in data
+        assert len(data["questions"]) >= 3
+        
+        # 최신순 정렬 확인 (첫 번째가 가장 최근)
+        if len(data["questions"]) >= 2:
+            first = data["questions"][0]
+            second = data["questions"][1]
+            assert first["created_at"] >= second["created_at"]
+    
+    def test_recent_questions_with_limit(
+        self, client, auth_headers_tino_user
+    ):
+        """최신 질문 - limit 파라미터 테스트"""
+        response = client.get(
+            "/home/recent-questions?limit=5",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.json()["questions"]) <= 5
+    
+    def test_recommended_stories_success(
+        self, client, auth_headers_tino_user
+    ):
+        """추천 스토리 조회 성공"""
+        from datetime import datetime, timedelta
+        
+        # 모집중인 스토리 생성
+        deadline = (datetime.now() + timedelta(days=7)).isoformat()
+        client.post(
+            "/tinostory",
+            json={
+                "title": "홈 추천 테스트 스토리",
+                "content": "추천 스토리 테스트용입니다.",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test"
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 추천 스토리 조회
+        response = client.get(
+            "/home/recommended-stories",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "stories" in data
+        assert "total" in data
+        
+        # 스토리가 있으면 reason, days_until_deadline 필드 확인
+        if data["stories"]:
+            story = data["stories"][0]
+            assert "reason" in story
+            assert "days_until_deadline" in story
+            assert "author_nickname" in story
+            assert story["recruitment_status"] == "RECRUITING"
+    
+    def test_recommended_stories_only_recruiting(
+        self, client, auth_headers_tino_user
+    ):
+        """추천 스토리 - 모집중인 것만 반환"""
+        from datetime import datetime, timedelta
+        
+        # 모집중인 스토리 생성
+        deadline = (datetime.now() + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "모집 완료 테스트",
+                "content": "모집 완료될 스토리입니다.",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test2"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+        
+        # 모집 완료 처리
+        client.put(
+            f"/tinostory/{story_id}",
+            json={"recruitment_status": "COMPLETED"},
+            headers=auth_headers_tino_user
+        )
+        
+        # 추천 스토리 조회 - 완료된 스토리는 제외되어야 함
+        response = client.get(
+            "/home/recommended-stories",
+            headers=auth_headers_tino_user
+        )
+        data = response.json()
+        
+        # 모집 완료된 스토리가 목록에 없는지 확인
+        story_ids = [s["id"] for s in data["stories"]]
+        assert story_id not in story_ids

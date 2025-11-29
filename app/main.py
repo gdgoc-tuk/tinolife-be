@@ -17,6 +17,7 @@ from app.domains.interests.router import router as interests_router
 from app.domains.qna.router import router as qna_router
 from app.domains.tinostory.router import router as tinostory_router
 from app.domains.tags.router import router as tags_router
+from app.domains.home.router import router as home_router
 
 
 @asynccontextmanager
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     app.include_router(qna_router, prefix="/api/v1")
     app.include_router(tinostory_router, prefix="/api/v1")
     app.include_router(tags_router, prefix="/api/v1")
+    app.include_router(home_router, prefix="/api/v1")
 
     # 정적 파일 서빙 (업로드된 이미지)
     uploads_dir = Path(settings.UPLOAD_DIR)
