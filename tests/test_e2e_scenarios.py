@@ -5,6 +5,7 @@ E2E 통합 테스트 - 전체 사용자 시나리오 검증
 
 import pytest
 from fastapi import status
+from datetime import datetime, timedelta, timezone
 
 
 # =============================================================================
@@ -985,3 +986,660 @@ class TestSearch:
         # 검색 결과가 있을 수 있음
         assert "questions" in data
         assert "total" in data
+
+
+# =============================================================================
+# Phase 8: 티노스토리 테스트
+# =============================================================================
+
+class TestTinoStoryBasicFlow:
+    """티노스토리 기본 CRUD 테스트"""
+
+    def test_create_story_success(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-001: 스토리 생성 성공"""
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        response = client.post(
+            "/tinostory",
+            json={
+                "title": "스터디 팀원 모집합니다",
+                "content": "FastAPI 스터디 팀원을 모집합니다. 함께 공부해요!",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test123",
+                "tag_names": ["python", "fastapi", "스터디"]
+            },
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert data["title"] == "스터디 팀원 모집합니다"
+        assert data["recruitment_type"] == "STUDY"
+        assert data["recruitment_status"] == "RECRUITING"
+        assert len(data["tags"]) == 3
+        assert "id" in data
+
+    def test_create_story_missing_required_field(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-002: 필수 필드 누락 시 에러"""
+        response = client.post(
+            "/tinostory",
+            json={
+                "title": "제목만 있는 스토리"
+                # content, recruitment_type, deadline, open_chat_link 누락
+            },
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_create_story_unauthorized(self, client):
+        """STORY-003: 비인증 사용자 스토리 생성 불가"""
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        response = client.post(
+            "/tinostory",
+            json={
+                "title": "테스트",
+                "content": "테스트 내용",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test"
+            }
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_story_list(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-004: 스토리 목록 조회"""
+        # 먼저 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        client.post(
+            "/tinostory",
+            json={
+                "title": "목록 테스트 스토리",
+                "content": "테스트 내용입니다.",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test"
+            },
+            headers=auth_headers_tino_user
+        )
+
+        # 목록 조회
+        response = client.get("/tinostory")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "stories" in data
+        assert "total" in data
+        assert data["total"] >= 1
+
+    def test_get_story_list_with_filters(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-005: 필터링된 스토리 목록 조회"""
+        # 다양한 타입의 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        
+        # CLUB 타입 스토리
+        client.post(
+            "/tinostory",
+            json={
+                "title": "동아리 모집",
+                "content": "프로그래밍 동아리입니다.",
+                "recruitment_type": "CLUB",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/club",
+                "tag_names": ["동아리"]
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # STUDY 타입 스토리
+        client.post(
+            "/tinostory",
+            json={
+                "title": "스터디 모집",
+                "content": "알고리즘 스터디입니다.",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/study",
+                "tag_names": ["스터디"]
+            },
+            headers=auth_headers_tino_user
+        )
+
+        # 태그로 필터링
+        response = client.get("/tinostory?tag=동아리")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 1
+        # 태그 필터링이 적용되었는지 확인
+        for story in data["stories"]:
+            tag_names = [t["name"] for t in story["tags"]]
+            assert "동아리" in tag_names
+
+    def test_get_story_detail(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-006: 스토리 상세 조회"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "상세 조회 테스트",
+                "content": "상세 내용입니다.",
+                "recruitment_type": "ACTIVITY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/detail"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 상세 조회 (인증 필요)
+        response = client.get(f"/tinostory/{story_id}", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["id"] == story_id
+        assert data["title"] == "상세 조회 테스트"
+        assert data["view_count"] >= 1  # 조회수 증가
+
+    def test_get_story_not_found(self, client, auth_headers_tino_user):
+        """STORY-007: 존재하지 않는 스토리 조회"""
+        response = client.get("/tinostory/99999", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_update_story_success(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-008: 스토리 수정 성공"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "수정 전 제목",
+                "content": "수정 전 내용",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/before"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 수정
+        new_deadline = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+        response = client.put(
+            f"/tinostory/{story_id}",
+            json={
+                "title": "수정 후 제목",
+                "content": "수정 후 내용",
+                "deadline": new_deadline,
+                "open_chat_link": "https://open.kakao.com/after"
+            },
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["title"] == "수정 후 제목"
+        assert data["content"] == "수정 후 내용"
+
+    def test_update_story_by_other_user(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """STORY-009: 다른 사용자가 스토리 수정 불가"""
+        # 스토리 생성 (첫 번째 유저)
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "내 스토리",
+                "content": "내 내용",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/mine"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 다른 유저가 수정 시도
+        response = client.put(
+            f"/tinostory/{story_id}",
+            json={"title": "남의 스토리 수정"},
+            headers=auth_headers_second_user
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_delete_story_success(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-010: 스토리 삭제 성공 (소프트 삭제)"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "삭제할 스토리",
+                "content": "삭제될 내용",
+                "recruitment_type": "OTHER",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/delete"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 삭제
+        response = client.delete(
+            f"/tinostory/{story_id}",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        # 삭제된 스토리 조회 불가 (인증 필요)
+        get_response = client.get(f"/tinostory/{story_id}", headers=auth_headers_tino_user)
+        assert get_response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_complete_recruitment(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-011: 모집 완료 처리"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "모집 완료 테스트",
+                "content": "모집 완료할 스토리",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/complete"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 모집 완료로 변경
+        response = client.put(
+            f"/tinostory/{story_id}",
+            json={"recruitment_status": "COMPLETED"},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["recruitment_status"] == "COMPLETED"
+
+
+class TestTinoStoryInteractions:
+    """티노스토리 상호작용 테스트 (좋아요, 북마크, 댓글)"""
+
+    def test_toggle_like(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """LIKE-001: 좋아요 토글"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "좋아요 테스트",
+                "content": "좋아요할 스토리",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/like"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 좋아요 추가 (두 번째 유저)
+        response1 = client.post(
+            f"/tinostory/{story_id}/like",
+            headers=auth_headers_second_user
+        )
+        assert response1.status_code == status.HTTP_200_OK
+        assert response1.json()["is_liked"] is True
+        assert response1.json()["like_count"] == 1
+
+        # 좋아요 취소 (토글)
+        response2 = client.post(
+            f"/tinostory/{story_id}/like",
+            headers=auth_headers_second_user
+        )
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.json()["is_liked"] is False
+        assert response2.json()["like_count"] == 0
+
+    def test_toggle_bookmark(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """BOOKMARK-001: 북마크 토글"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "북마크 테스트",
+                "content": "북마크할 스토리",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/bookmark"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 북마크 추가
+        response1 = client.post(
+            f"/tinostory/{story_id}/bookmark",
+            headers=auth_headers_second_user
+        )
+        assert response1.status_code == status.HTTP_200_OK
+        assert response1.json()["is_bookmarked"] is True
+
+        # 북마크 취소 (토글)
+        response2 = client.post(
+            f"/tinostory/{story_id}/bookmark",
+            headers=auth_headers_second_user
+        )
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.json()["is_bookmarked"] is False
+
+    def test_get_my_bookmarks(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """BOOKMARK-002: 내 북마크 목록 조회"""
+        # 스토리 2개 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        story_ids = []
+        for i in range(2):
+            create_response = client.post(
+                "/tinostory",
+                json={
+                    "title": f"북마크 목록 테스트 {i+1}",
+                    "content": f"내용 {i+1}",
+                    "recruitment_type": "STUDY",
+                    "deadline": deadline,
+                    "open_chat_link": f"https://open.kakao.com/bm{i}"
+                },
+                headers=auth_headers_tino_user
+            )
+            story_ids.append(create_response.json()["id"])
+
+        # 두 번째 유저가 북마크
+        for story_id in story_ids:
+            client.post(
+                f"/tinostory/{story_id}/bookmark",
+                headers=auth_headers_second_user
+            )
+
+        # 북마크 목록 조회
+        response = client.get(
+            "/tinostory/bookmarks/me",
+            headers=auth_headers_second_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 2
+
+    def test_create_comment(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """COMMENT-001: 댓글 작성"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "댓글 테스트",
+                "content": "댓글 달 스토리",
+                "recruitment_type": "CLUB",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/comment"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 댓글 작성
+        response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "참여하고 싶습니다!"},
+            headers=auth_headers_second_user
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert data["content"] == "참여하고 싶습니다!"
+        assert "id" in data
+
+    def test_get_comments(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """COMMENT-002: 댓글 목록 조회"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "댓글 목록 테스트",
+                "content": "댓글 여러 개",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/comments"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 댓글 2개 작성
+        client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "첫 번째 댓글"},
+            headers=auth_headers_second_user
+        )
+        client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "두 번째 댓글"},
+            headers=auth_headers_tino_user
+        )
+
+        # 댓글 목록 조회
+        response = client.get(f"/tinostory/{story_id}/comments")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 2
+
+    def test_update_comment(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """COMMENT-003: 댓글 수정"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "댓글 수정 테스트",
+                "content": "댓글 수정",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/edit"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 댓글 작성
+        comment_response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "수정 전 댓글"},
+            headers=auth_headers_second_user
+        )
+        comment_id = comment_response.json()["id"]
+
+        # 댓글 수정
+        response = client.put(
+            f"/tinostory/comments/{comment_id}",
+            json={"content": "수정 후 댓글"},
+            headers=auth_headers_second_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["content"] == "수정 후 댓글"
+
+    def test_update_comment_by_other_user(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """COMMENT-004: 다른 사용자 댓글 수정 불가"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "다른 유저 댓글 수정 테스트",
+                "content": "내용",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/other"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 두 번째 유저가 댓글 작성
+        comment_response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "두 번째 유저 댓글"},
+            headers=auth_headers_second_user
+        )
+        comment_id = comment_response.json()["id"]
+
+        # 첫 번째 유저가 수정 시도
+        response = client.put(
+            f"/tinostory/comments/{comment_id}",
+            json={"content": "남의 댓글 수정"},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_delete_comment(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """COMMENT-005: 댓글 삭제"""
+        # 스토리 생성
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "댓글 삭제 테스트",
+                "content": "내용",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/del"
+            },
+            headers=auth_headers_tino_user
+        )
+        story_id = create_response.json()["id"]
+
+        # 댓글 작성
+        comment_response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "삭제할 댓글"},
+            headers=auth_headers_second_user
+        )
+        comment_id = comment_response.json()["id"]
+
+        # 댓글 삭제
+        response = client.delete(
+            f"/tinostory/comments/{comment_id}",
+            headers=auth_headers_second_user
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+class TestTinoStoryFullScenario:
+    """티노스토리 전체 시나리오 테스트"""
+
+    def test_full_story_lifecycle(
+        self, client, auth_headers_tino_user, auth_headers_second_user
+    ):
+        """SCENARIO-001: 스토리 전체 라이프사이클"""
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+
+        # 1. 스토리 생성
+        create_response = client.post(
+            "/tinostory",
+            json={
+                "title": "알고리즘 스터디 모집",
+                "content": "매주 토요일 2시간 알고리즘 문제를 풉니다.",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/algo",
+                "tag_names": ["알고리즘", "코딩테스트"]
+            },
+            headers=auth_headers_tino_user
+        )
+        assert create_response.status_code == status.HTTP_201_CREATED
+        story_id = create_response.json()["id"]
+
+        # 2. 다른 유저가 상세 조회
+        detail_response = client.get(
+            f"/tinostory/{story_id}",
+            headers=auth_headers_second_user
+        )
+        assert detail_response.status_code == status.HTTP_200_OK
+        assert detail_response.json()["view_count"] >= 1
+
+        # 3. 좋아요
+        like_response = client.post(
+            f"/tinostory/{story_id}/like",
+            headers=auth_headers_second_user
+        )
+        assert like_response.json()["is_liked"] is True
+
+        # 4. 북마크
+        bookmark_response = client.post(
+            f"/tinostory/{story_id}/bookmark",
+            headers=auth_headers_second_user
+        )
+        assert bookmark_response.json()["is_bookmarked"] is True
+
+        # 5. 댓글 작성
+        comment_response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "참여하고 싶습니다! 연락 주세요."},
+            headers=auth_headers_second_user
+        )
+        assert comment_response.status_code == status.HTTP_201_CREATED
+
+        # 6. 작성자가 답글 (댓글)
+        reply_response = client.post(
+            f"/tinostory/{story_id}/comments",
+            json={"content": "오픈채팅방 링크로 들어와주세요!"},
+            headers=auth_headers_tino_user
+        )
+        assert reply_response.status_code == status.HTTP_201_CREATED
+
+        # 7. 상세 조회로 상태 확인 (인증 필요)
+        final_detail = client.get(f"/tinostory/{story_id}", headers=auth_headers_tino_user)
+        data = final_detail.json()
+        assert data["like_count"] >= 1
+        assert data["bookmark_count"] >= 1
+        assert data["comment_count"] >= 2
+
+        # 8. 모집 완료 처리
+        complete_response = client.put(
+            f"/tinostory/{story_id}",
+            json={"recruitment_status": "COMPLETED"},
+            headers=auth_headers_tino_user
+        )
+        assert complete_response.json()["recruitment_status"] == "COMPLETED"
+
+        # 9. 목록에서 모집 완료 상태 확인
+        list_response = client.get("/tinostory?status_filter=all")
+        assert any(
+            item["id"] == story_id 
+            for item in list_response.json()["stories"]
+        )

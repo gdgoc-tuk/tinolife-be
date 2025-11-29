@@ -21,6 +21,10 @@ from app.domains.qna.model import (  # noqa: F401
     Category, Tag, Question, Answer, AnswerVote, AnswerComment,
     QuestionInterest, QuestionBookmark, Report
 )
+from app.domains.tinostory.model import (  # noqa: F401
+    Story, StoryImage, StoryLike, StoryBookmark, StoryComment, StoryReport,
+    story_tags, RecruitmentType, RecruitmentStatus
+)
 
 
 # 테스트용 인메모리 데이터베이스 설정
