@@ -147,6 +147,12 @@ class QuestionResponse(QuestionBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class QuestionDetailResponse(QuestionResponse):
+    """질문 상세 응답 스키마 (사용자별 상태 포함)"""
+    is_interested: bool = False  # 현재 사용자 관심 표시 여부
+    is_bookmarked: bool = False  # 현재 사용자 북마크 여부
+
+
 class QuestionListItem(BaseModel):
     """질문 목록 아이템 스키마"""
     id: int

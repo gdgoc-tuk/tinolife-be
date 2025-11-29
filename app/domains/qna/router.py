@@ -10,6 +10,7 @@ from app.domains.qna.schema import (
     QuestionCreate,
     QuestionUpdate,
     QuestionResponse,
+    QuestionDetailResponse,
     QuestionListResponse,
     QuestionListItem,
     AnswerCreate,
@@ -242,16 +243,20 @@ async def get_questions(
     )
 
 
-@router.get("/questions/{question_id}", response_model=QuestionResponse)
+@router.get("/questions/{question_id}", response_model=QuestionDetailResponse)
 async def get_question(
     question_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service),
+    interest_service: InterestService = Depends(get_interest_service),
+    bookmark_service: BookmarkService = Depends(get_bookmark_service),
 ):
     """
     질문 상세 조회
     
     - **question_id**: 질문 ID
+    - 로그인 사용자의 관심/북마크 여부도 함께 반환
     """
     question = await service.get_question_by_id(db, question_id, increment_view=True)
     
@@ -267,7 +272,15 @@ async def get_question(
             detail="삭제되었거나 숨겨진 질문입니다"
         )
     
-    return question
+    # 현재 사용자의 관심/북마크 여부 확인
+    is_interested = await interest_service.check_interest(db, question_id, current_user.id)
+    is_bookmarked = await bookmark_service.check_bookmark(db, question_id, current_user.id)
+    
+    return QuestionDetailResponse(
+        **QuestionResponse.model_validate(question).model_dump(),
+        is_interested=is_interested,
+        is_bookmarked=is_bookmarked
+    )
 
 
 @router.put("/questions/{question_id}", response_model=QuestionResponse)

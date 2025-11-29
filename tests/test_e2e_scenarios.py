@@ -356,7 +356,7 @@ class TestQnABasicFlow:
     def test_get_question_detail(
         self, client, auth_headers_tino_user, sample_category
     ):
-        """질문 상세 조회"""
+        """질문 상세 조회 (관심/북마크 여부 포함)"""
         # 질문 생성
         create_response = client.post(
             "/qna/questions",
@@ -370,13 +370,20 @@ class TestQnABasicFlow:
         )
         question_id = create_response.json()["id"]
         
-        # 상세 조회
-        response = client.get(f"/qna/questions/{question_id}")
+        # 상세 조회 (인증 필요)
+        response = client.get(
+            f"/qna/questions/{question_id}",
+            headers=auth_headers_tino_user
+        )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["id"] == question_id
         assert data["title"] == "상세 조회용 질문"
         assert data["view_count"] >= 1  # 조회 시 조회수 증가
+        assert "is_interested" in data
+        assert "is_bookmarked" in data
+        assert data["is_interested"] is False
+        assert data["is_bookmarked"] is False
 
 
 # =============================================================================
@@ -761,8 +768,11 @@ class TestFullIntegrationScenario:
         db_session.refresh(answerer)
         assert answerer.tino_balance == 27
         
-        # 질문 상태 확인
-        question_detail = client.get(f"/qna/questions/{question_id}")
+        # 질문 상태 확인 (인증 필요)
+        question_detail = client.get(
+            f"/qna/questions/{question_id}",
+            headers=asker_headers
+        )
         assert question_detail.json()["accepted_answer_id"] == answer_id
     
     def test_question_with_multiple_answers(
@@ -907,6 +917,13 @@ class TestBookmarkAndInterest:
         assert response1.status_code == status.HTTP_200_OK
         assert response1.json()["is_interested"] is True
         
+        # 상세 조회에서 is_interested 확인
+        detail_response = client.get(
+            f"/qna/questions/{question_id}",
+            headers=auth_headers_second_user
+        )
+        assert detail_response.json()["is_interested"] is True
+        
         # 관심 취소 (토글)
         response2 = client.post(
             f"/qna/questions/{question_id}/interest",
@@ -939,6 +956,13 @@ class TestBookmarkAndInterest:
         )
         assert response1.status_code == status.HTTP_200_OK
         assert response1.json()["is_bookmarked"] is True
+        
+        # 상세 조회에서 is_bookmarked 확인
+        detail_response = client.get(
+            f"/qna/questions/{question_id}",
+            headers=auth_headers_second_user
+        )
+        assert detail_response.json()["is_bookmarked"] is True
         
         # 북마크 목록 확인
         bookmarks = client.get("/qna/bookmarks", headers=auth_headers_second_user)
