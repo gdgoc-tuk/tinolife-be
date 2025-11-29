@@ -11,7 +11,7 @@ from app.domains.tinostory.model import (
     RecruitmentStatus, story_tags
 )
 from app.domains.tinostory.schema import StoryCreate, StoryUpdate
-from app.domains.qna.model import Tag
+from app.domains.tags.model import Tag
 from app.common.exceptions import BadRequestException, NotFoundException, ForbiddenException
 
 

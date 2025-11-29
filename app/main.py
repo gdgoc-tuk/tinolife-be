@@ -16,6 +16,7 @@ from app.domains.majors.router import router as majors_router
 from app.domains.interests.router import router as interests_router
 from app.domains.qna.router import router as qna_router
 from app.domains.tinostory.router import router as tinostory_router
+from app.domains.tags.router import router as tags_router
 
 
 @asynccontextmanager
@@ -37,8 +38,9 @@ async def lifespan(app: FastAPI):
     from app.domains.auth.model import AllowedEmailDomain, RefreshToken, LoginHistory, EmailVerification
     from app.domains.majors.model import Major
     from app.domains.interests.model import Interest, user_interests
+    from app.domains.tags.model import Tag
     from app.domains.qna.model import (
-        Category, Tag, Question, Answer, AnswerVote, AnswerComment,
+        Category, Question, Answer, AnswerVote, AnswerComment,
         QuestionInterest, QuestionBookmark, QuestionImage, AnswerImage, question_tags
     )
     from app.domains.tinostory.model import (
@@ -106,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(interests_router, prefix="/api/v1")
     app.include_router(qna_router, prefix="/api/v1")
     app.include_router(tinostory_router, prefix="/api/v1")
+    app.include_router(tags_router, prefix="/api/v1")
 
     # 정적 파일 서빙 (업로드된 이미지)
     uploads_dir = Path(settings.UPLOAD_DIR)
