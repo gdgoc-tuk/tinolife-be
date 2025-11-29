@@ -1845,3 +1845,280 @@ class TestHomeAPI:
         # 모집 완료된 스토리가 목록에 없는지 확인
         story_ids = [s["id"] for s in data["stories"]]
         assert story_id not in story_ids
+
+
+class TestMypageAPI:
+    """마이페이지 API 테스트"""
+    
+    def test_mypage_main_unauthorized(self, client):
+        """마이페이지 메인 - 비로그인 시 401"""
+        response = client.get("/mypage")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    
+    def test_mypage_main_success(
+        self, client, auth_headers_tino_user, sample_user_with_tino, sample_major
+    ):
+        """마이페이지 메인 조회 성공"""
+        response = client.get("/mypage", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # 프로필 확인
+        assert "profile" in data
+        assert data["profile"]["nickname"] == sample_user_with_tino.nickname
+        assert data["profile"]["email"] == sample_user_with_tino.email
+        assert data["profile"]["grade"] == sample_user_with_tino.grade
+        
+        # 활동 요약 확인
+        assert "activity_summary" in data
+        assert "question_count" in data["activity_summary"]
+        assert "answer_count" in data["activity_summary"]
+        assert "accepted_answer_count" in data["activity_summary"]
+        assert "story_count" in data["activity_summary"]
+        
+        # TINO 확인
+        assert "tino" in data
+        assert data["tino"]["balance"] == sample_user_with_tino.tino_balance
+    
+    def test_mypage_main_with_activities(
+        self, client, auth_headers_tino_user, sample_category
+    ):
+        """마이페이지 메인 - 활동이 있는 경우"""
+        from datetime import datetime, timedelta
+        
+        # 질문 생성
+        client.post(
+            "/qna/questions",
+            json={
+                "title": "마이페이지 테스트 질문",
+                "content": "마이페이지 활동 카운트 테스트",
+                "category_id": sample_category.id,
+                "bounty": 0
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 스토리 생성
+        deadline = (datetime.now() + timedelta(days=7)).isoformat()
+        client.post(
+            "/tinostory",
+            json={
+                "title": "마이페이지 테스트 스토리",
+                "content": "마이페이지 활동 카운트 테스트",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test"
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 마이페이지 조회
+        response = client.get("/mypage", headers=auth_headers_tino_user)
+        data = response.json()
+        
+        assert data["activity_summary"]["question_count"] >= 1
+        assert data["activity_summary"]["story_count"] >= 1
+    
+    def test_tino_history_success(
+        self, client, auth_headers_tino_user
+    ):
+        """TINO 이력 조회 성공"""
+        response = client.get("/mypage/tino-history", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert "transactions" in data
+        assert "total" in data
+        assert "page" in data
+        assert "page_size" in data
+    
+    def test_tino_history_with_pagination(
+        self, client, auth_headers_tino_user
+    ):
+        """TINO 이력 - 페이지네이션 테스트"""
+        response = client.get(
+            "/mypage/tino-history?page=1&page_size=5",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert data["page"] == 1
+        assert data["page_size"] == 5
+        assert len(data["transactions"]) <= 5
+    
+    def test_tino_history_with_date_filter(
+        self, client, auth_headers_tino_user
+    ):
+        """TINO 이력 - 날짜 필터 테스트"""
+        from datetime import date
+        
+        today = date.today().isoformat()
+        response = client.get(
+            f"/mypage/tino-history?start_date={today}&end_date={today}",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+    
+    def test_my_questions_success(
+        self, client, auth_headers_tino_user, sample_category
+    ):
+        """내 질문 목록 조회 성공"""
+        # 질문 생성
+        client.post(
+            "/qna/questions",
+            json={
+                "title": "내 질문 목록 테스트",
+                "content": "내 질문 목록 테스트용입니다.",
+                "category_id": sample_category.id,
+                "bounty": 0
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 내 질문 조회
+        response = client.get("/mypage/questions", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert "questions" in data
+        assert "total" in data
+        assert data["total"] >= 1
+        
+        question = data["questions"][0]
+        assert "id" in question
+        assert "title" in question
+        assert "category" in question
+        assert "is_accepted" in question
+    
+    def test_my_answers_success(
+        self, client, auth_headers_tino_user, auth_headers_second_user, sample_category
+    ):
+        """내 답변 목록 조회 성공"""
+        # 다른 유저가 질문 생성
+        q_response = client.post(
+            "/qna/questions",
+            json={
+                "title": "답변할 질문",
+                "content": "답변 목록 테스트용 질문입니다.",
+                "category_id": sample_category.id,
+                "bounty": 0
+            },
+            headers=auth_headers_second_user
+        )
+        question_id = q_response.json()["id"]
+        
+        # 내가 답변 작성
+        client.post(
+            f"/qna/questions/{question_id}/answers",
+            json={
+                "content": "내 답변 목록 테스트용 답변입니다. 답변 내용이 길어야 테스트가 정확합니다."
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 내 답변 조회
+        response = client.get("/mypage/answers", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert "answers" in data
+        assert "total" in data
+        assert data["total"] >= 1
+        
+        answer = data["answers"][0]
+        assert "id" in answer
+        assert "question_id" in answer
+        assert "question_title" in answer
+        assert "content_preview" in answer
+        assert "is_accepted" in answer
+    
+    def test_my_stories_success(
+        self, client, auth_headers_tino_user
+    ):
+        """내 스토리 목록 조회 성공"""
+        from datetime import datetime, timedelta
+        
+        # 스토리 생성
+        deadline = (datetime.now() + timedelta(days=7)).isoformat()
+        client.post(
+            "/tinostory",
+            json={
+                "title": "내 스토리 목록 테스트",
+                "content": "내 스토리 목록 테스트용입니다.",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/test"
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 내 스토리 조회
+        response = client.get("/mypage/stories", headers=auth_headers_tino_user)
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert "stories" in data
+        assert "total" in data
+        assert data["total"] >= 1
+        
+        story = data["stories"][0]
+        assert "id" in story
+        assert "title" in story
+        assert "recruitment_type" in story
+        assert "recruitment_status" in story
+        assert "days_until_deadline" in story
+    
+    def test_my_stories_with_status_filter(
+        self, client, auth_headers_tino_user
+    ):
+        """내 스토리 - 상태 필터 테스트"""
+        response = client.get(
+            "/mypage/stories?status_filter=recruiting",
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # 모든 스토리가 모집중인지 확인
+        for story in data["stories"]:
+            assert story["recruitment_status"] == "RECRUITING"
+    
+    def test_profile_update_nickname(
+        self, client, auth_headers_tino_user
+    ):
+        """프로필 수정 - 닉네임 변경"""
+        response = client.put(
+            "/mypage/profile",
+            json={"nickname": "새닉네임123"},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert data["nickname"] == "새닉네임123"
+    
+    def test_profile_update_grade(
+        self, client, auth_headers_tino_user
+    ):
+        """프로필 수정 - 학년 변경"""
+        response = client.put(
+            "/mypage/profile",
+            json={"grade": 4},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        assert data["grade"] == 4
+    
+    def test_profile_update_nickname_duplicate(
+        self, client, auth_headers_tino_user, second_user
+    ):
+        """프로필 수정 - 중복 닉네임 실패"""
+        response = client.put(
+            "/mypage/profile",
+            json={"nickname": second_user.nickname},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
