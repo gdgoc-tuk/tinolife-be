@@ -1297,6 +1297,50 @@ class TestTinoStoryBasicFlow:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["recruitment_status"] == "COMPLETED"
 
+    def test_upload_image_success(self, client, auth_headers_tino_user):
+        """STORY-IMAGE-001: 이미지 업로드 성공"""
+        import io
+        
+        # 테스트용 가짜 이미지 파일 생성 (1x1 PNG)
+        png_header = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+        
+        response = client.post(
+            "/tinostory/images/upload",
+            files={"file": ("test_image.png", io.BytesIO(png_header), "image/png")},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "image_url" in data
+        assert "image_key" in data
+        assert data["mime_type"] == "image/png"
+        assert "tinostory/images" in data["image_key"]
+        assert data["message"] == "이미지가 성공적으로 업로드되었습니다"
+
+    def test_upload_image_unauthorized(self, client):
+        """STORY-IMAGE-002: 비인증 사용자 이미지 업로드 불가"""
+        import io
+        
+        png_header = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+        
+        response = client.post(
+            "/tinostory/images/upload",
+            files={"file": ("test_image.png", io.BytesIO(png_header), "image/png")}
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_upload_image_invalid_type(self, client, auth_headers_tino_user):
+        """STORY-IMAGE-003: 허용되지 않는 파일 형식 업로드 실패"""
+        import io
+        
+        # 텍스트 파일로 테스트
+        response = client.post(
+            "/tinostory/images/upload",
+            files={"file": ("test.txt", io.BytesIO(b"hello world"), "text/plain")},
+            headers=auth_headers_tino_user
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
 
 class TestTinoStoryInteractions:
     """티노스토리 상호작용 테스트 (좋아요, 북마크, 댓글)"""

@@ -165,3 +165,12 @@ class BookmarkListResponse(BaseModel):
     """북마크 목록 응답 스키마"""
     stories: list[StoryListItem]
     total: int
+
+
+class ImageUploadResponse(BaseModel):
+    """이미지 업로드 응답 스키마"""
+    image_url: str
+    image_key: str
+    file_size: int
+    mime_type: str
+    message: str

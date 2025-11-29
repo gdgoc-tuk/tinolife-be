@@ -209,5 +209,6 @@ pyrightconfig.json
 ### Project Specific ###
 /docs/memo
 /scripts/data
+/uploads/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,macos
