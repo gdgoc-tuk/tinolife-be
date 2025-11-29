@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     # Startup
     # 모든 모델 임포트 (SQLAlchemy relationship 설정을 위해 필요)
     from app.domains.users.model import User
-    from app.domains.users.tino_transaction import TinoTransaction, TransactionType
+    from app.domains.tino.model import TinoTransaction, TransactionType
     from app.domains.auth.model import AllowedEmailDomain, RefreshToken, LoginHistory, EmailVerification
     from app.domains.majors.model import Major
     from app.domains.interests.model import Interest, user_interests

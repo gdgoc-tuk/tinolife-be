@@ -232,8 +232,8 @@ class QuestionService:
         """
         from app.domains.qna.model import Category
         from app.domains.majors.model import Major
-        from app.domains.users.token_service import TokenService
-        from app.domains.users.tino_transaction import TransactionType
+        from app.domains.tino.service import TinoService
+        from app.domains.tino.model import TransactionType
         
         category = db.query(Category).filter(Category.id == question_data.category_id).first()
         if not category or not category.is_active:
@@ -244,12 +244,11 @@ class QuestionService:
             if not major:
                 raise NotFoundException(f"전공을 찾을 수 없습니다: {question_data.major_id}")
         
-        token_service = TokenService()
+        tino_service = TinoService(db)
         
         # 바운티가 설정된 경우 토큰 차감
         if question_data.bounty > 0:
-            await token_service.deduct_token(
-                db=db,
+            tino_service.deduct_token(
                 user_id=user_id,
                 amount=question_data.bounty,
                 transaction_type=TransactionType.QUESTION_BOUNTY,
@@ -276,7 +275,7 @@ class QuestionService:
         
         # 바운티가 있는 경우 question_id를 업데이트
         if question_data.bounty > 0:
-            from app.domains.users.tino_transaction import TinoTransaction as TinoTx
+            from app.domains.tino.model import TinoTransaction as TinoTx
             recent_tx = db.query(TinoTx)\
               .filter(TinoTx.user_id == user_id)\
               .filter(TinoTx.question_id == None)\
@@ -287,8 +286,7 @@ class QuestionService:
                 recent_tx.question_id = question.id
         
         # 질문 등록 보상 1 TINO 지급
-        await token_service.charge_token(
-            db=db,
+        tino_service.charge_token(
             user_id=user_id,
             amount=1,
             transaction_type=TransactionType.QUESTION_REWARD,
@@ -455,12 +453,11 @@ class QuestionService:
             if question_data.bounty > question.bounty:
                 additional_bounty = question_data.bounty - question.bounty
                 
-                from app.domains.users.token_service import TokenService
-                from app.domains.users.tino_transaction import TransactionType
+                from app.domains.tino.service import TinoService
+                from app.domains.tino.model import TransactionType
                 
-                token_service = TokenService()
-                await token_service.deduct_token(
-                    db=db,
+                tino_service = TinoService(db)
+                tino_service.deduct_token(
                     user_id=user_id,
                     amount=additional_bounty,
                     transaction_type=TransactionType.QUESTION_BOUNTY,
@@ -525,8 +522,8 @@ class AnswerService:
         Returns:
             생성된 답변
         """
-        from app.domains.users.token_service import TokenService
-        from app.domains.users.tino_transaction import TransactionType
+        from app.domains.tino.service import TinoService
+        from app.domains.tino.model import TransactionType
         
         question = db.query(Question).filter(Question.id == question_id).first()
         if not question:
@@ -551,9 +548,8 @@ class AnswerService:
         
         db.flush()
         
-        token_service = TokenService()
-        await token_service.charge_token(
-            db=db,
+        tino_service = TinoService(db)
+        tino_service.charge_token(
             user_id=user_id,
             amount=2,
             transaction_type=TransactionType.ANSWER_REWARD,
@@ -743,8 +739,8 @@ class AnswerService:
         
         # 좋아요 5개 달성 시 보상 (최초 1회)
         if is_like and answer.like_count == 5:
-            from app.domains.users.token_service import TokenService
-            from app.domains.users.tino_transaction import TransactionType, TinoTransaction
+            from app.domains.tino.service import TinoService
+            from app.domains.tino.model import TransactionType, TinoTransaction
             
             existing_bonus = db.query(TinoTransaction).filter(
                 TinoTransaction.answer_id == answer_id,
@@ -752,9 +748,8 @@ class AnswerService:
             ).first()
             
             if not existing_bonus:
-                token_service = TokenService()
-                await token_service.charge_token(
-                    db=db,
+                tino_service = TinoService(db)
+                tino_service.charge_token(
                     user_id=answer.user_id,
                     amount=3,
                     transaction_type=TransactionType.ANSWER_LIKE_BONUS,
@@ -786,8 +781,8 @@ class AnswerService:
         Returns:
             업데이트된 질문
         """
-        from app.domains.users.token_service import TokenService
-        from app.domains.users.tino_transaction import TransactionType
+        from app.domains.tino.service import TinoService
+        from app.domains.tino.model import TransactionType
         
         question = db.query(Question).filter(Question.id == question_id).first()
         if not question:
@@ -817,12 +812,11 @@ class AnswerService:
         question.accepted_at = datetime.now(timezone.utc)
         answer.is_accepted = True
         
-        token_service = TokenService()
+        tino_service = TinoService(db)
         
         # 채택 보상: 10 TINO + 바운티
         reward_amount = 10 + question.bounty
-        await token_service.charge_token(
-            db=db,
+        tino_service.charge_token(
             user_id=answer.user_id,
             amount=reward_amount,
             transaction_type=TransactionType.ANSWER_ACCEPTED,

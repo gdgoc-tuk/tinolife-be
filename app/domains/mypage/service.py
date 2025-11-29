@@ -6,16 +6,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.domains.users.model import User
-from app.domains.users.tino_transaction import TinoTransaction
 from app.domains.qna.model import Question, Answer
 from app.domains.tinostory.model import Story, RecruitmentStatus
+from app.domains.tino.service import TinoService
+from app.domains.tino.schema import TinoHistoryResponse
 from app.domains.mypage.schema import (
     ProfileResponse,
     ActivitySummaryResponse,
     TinoSummaryResponse,
     MypageMainResponse,
-    TinoTransactionResponse,
-    TinoHistoryResponse,
     MyQuestionItem,
     MyQuestionsResponse,
     MyAnswerItem,
@@ -23,12 +22,11 @@ from app.domains.mypage.schema import (
     MyStoryItem,
     MyStoriesResponse,
     ProfileUpdateResponse,
-    TRANSACTION_TYPE_DISPLAY,
 )
 from app.domains.majors.schema import MajorResponse
 from app.domains.qna.schema import CategoryResponse
 from app.domains.tags.schema import TagResponse
-from app.common.exceptions import BadRequestException, NotFoundException
+from app.common.exceptions import BadRequestException
 
 
 class MypageService:
@@ -94,49 +92,9 @@ class MypageService:
         page: int,
         page_size: int,
     ) -> TinoHistoryResponse:
-        """TINO 이력 조회"""
-        query = self.db.query(TinoTransaction).filter(
-            TinoTransaction.user_id == user.id
-        )
-
-        if start_date:
-            start_datetime = datetime.combine(start_date, datetime.min.time())
-            query = query.filter(TinoTransaction.created_at >= start_datetime)
-
-        if end_date:
-            end_datetime = datetime.combine(end_date, datetime.max.time())
-            query = query.filter(TinoTransaction.created_at <= end_datetime)
-
-        total = query.count()
-
-        transactions = query.order_by(TinoTransaction.created_at.desc()) \
-            .offset((page - 1) * page_size) \
-            .limit(page_size) \
-            .all()
-
-        transaction_responses = [
-            TinoTransactionResponse(
-                id=t.id,
-                transaction_type=t.transaction_type,
-                transaction_type_display=TRANSACTION_TYPE_DISPLAY.get(
-                    t.transaction_type, t.transaction_type
-                ),
-                amount=t.amount,
-                balance_after=t.balance_after,
-                description=t.description,
-                related_question_id=t.question_id,
-                related_answer_id=t.answer_id,
-                created_at=t.created_at,
-            )
-            for t in transactions
-        ]
-
-        return TinoHistoryResponse(
-            transactions=transaction_responses,
-            total=total,
-            page=page,
-            page_size=page_size,
-        )
+        """TINO 이력 조회 - TinoService에 위임"""
+        tino_service = TinoService(self.db)
+        return tino_service.get_history(user, start_date, end_date, page, page_size)
 
     def get_my_questions(
         self,

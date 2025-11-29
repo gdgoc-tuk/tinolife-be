@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.common.dependencies import get_current_user
 from app.domains.users.model import User
+from app.domains.tino.schema import TinoHistoryResponse
 from app.domains.mypage.schema import (
     MypageMainResponse,
-    TinoHistoryResponse,
     MyQuestionsResponse,
     MyAnswersResponse,
     MyStoriesResponse,
