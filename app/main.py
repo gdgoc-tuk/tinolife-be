@@ -15,6 +15,7 @@ from app.domains.auth.router import router as auth_router
 from app.domains.majors.router import router as majors_router
 from app.domains.interests.router import router as interests_router
 from app.domains.qna.router import router as qna_router
+from app.domains.tinostory.router import router as tinostory_router
 
 
 @asynccontextmanager
@@ -39,6 +40,10 @@ async def lifespan(app: FastAPI):
     from app.domains.qna.model import (
         Category, Tag, Question, Answer, AnswerVote, AnswerComment,
         QuestionInterest, QuestionBookmark, QuestionImage, AnswerImage, question_tags
+    )
+    from app.domains.tinostory.model import (
+        Story, StoryImage, StoryLike, StoryBookmark, StoryComment, StoryReport,
+        story_tags, RecruitmentType, RecruitmentStatus
     )
 
     try:
@@ -100,6 +105,7 @@ def create_app() -> FastAPI:
     app.include_router(majors_router, prefix="/api/v1")
     app.include_router(interests_router, prefix="/api/v1")
     app.include_router(qna_router, prefix="/api/v1")
+    app.include_router(tinostory_router, prefix="/api/v1")
 
     # 정적 파일 서빙 (업로드된 이미지)
     uploads_dir = Path(settings.UPLOAD_DIR)
