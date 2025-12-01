@@ -92,6 +92,7 @@ async def get_stories(
     limit: int = Query(20, ge=1, le=100, description="조회할 항목 수"),
     sort_by: str = Query("recent", pattern="^(recent|deadline|popular)$", description="정렬 기준"),
     status_filter: str = Query("recruiting", pattern="^(recruiting|all)$", description="상태 필터"),
+    recruitment_type: str = Query(None, pattern="^(CLUB|STUDY|PROJECT|ACTIVITY|OTHER)$", description="모집 타입 필터"),
     tag: str = Query(None, description="태그 필터"),
     db: Session = Depends(get_db),
     service: StoryService = Depends(get_story_service),
@@ -103,10 +104,12 @@ async def get_stories(
     - **limit**: 조회할 항목 수 (최대 100)
     - **sort_by**: 정렬 기준 (recent: 최신순, deadline: 마감 임박순, popular: 인기순)
     - **status_filter**: 상태 필터 (recruiting: 모집중만, all: 전체)
+    - **recruitment_type**: 모집 타입 필터 (CLUB: 동아리, STUDY: 스터디, PROJECT: 프로젝트, ACTIVITY: 대외활동, OTHER: 기타)
     - **tag**: 태그 필터
     """
     stories, total = await service.get_stories(
-        db, skip=skip, limit=limit, sort_by=sort_by, status_filter=status_filter, tag=tag
+        db, skip=skip, limit=limit, sort_by=sort_by, status_filter=status_filter, 
+        recruitment_type=recruitment_type, tag=tag
     )
     
     story_items = [_build_story_list_item(story) for story in stories]

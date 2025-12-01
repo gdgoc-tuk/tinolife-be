@@ -1144,6 +1144,54 @@ class TestTinoStoryBasicFlow:
             tag_names = [t["name"] for t in story["tags"]]
             assert "동아리" in tag_names
 
+    def test_get_story_list_filter_by_recruitment_type(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-005-2: 모집 타입으로 필터링"""
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        
+        # CLUB 타입 스토리 생성
+        client.post(
+            "/tinostory",
+            json={
+                "title": "동아리 모집합니다",
+                "content": "프로그래밍 동아리입니다.",
+                "recruitment_type": "CLUB",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/club"
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # PROJECT 타입 스토리 생성
+        client.post(
+            "/tinostory",
+            json={
+                "title": "프로젝트 팀원 모집",
+                "content": "앱 개발 프로젝트입니다.",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/project"
+            },
+            headers=auth_headers_tino_user
+        )
+
+        # CLUB 타입으로 필터링
+        response = client.get("/tinostory?recruitment_type=CLUB")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 1
+        for story in data["stories"]:
+            assert story["recruitment_type"] == "CLUB"
+
+        # PROJECT 타입으로 필터링
+        response = client.get("/tinostory?recruitment_type=PROJECT")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 1
+        for story in data["stories"]:
+            assert story["recruitment_type"] == "PROJECT"
+
     def test_get_story_detail(
         self, client, auth_headers_tino_user
     ):

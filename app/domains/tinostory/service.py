@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from app.domains.tinostory.model import (
     Story, StoryImage, StoryLike, StoryBookmark, StoryComment, StoryReport,
-    RecruitmentStatus, story_tags
+    RecruitmentStatus, RecruitmentType, story_tags
 )
 from app.domains.tinostory.schema import StoryCreate, StoryUpdate
 from app.domains.tags.model import Tag
@@ -159,6 +159,7 @@ class StoryService:
         limit: int = 20,
         sort_by: str = "recent",
         status_filter: Optional[str] = "recruiting",
+        recruitment_type: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> tuple[List[Story], int]:
         """
@@ -170,6 +171,7 @@ class StoryService:
             limit: 조회할 항목 수
             sort_by: 정렬 기준 (recent, deadline, popular)
             status_filter: 상태 필터 (recruiting, all)
+            recruitment_type: 모집 타입 필터 (CLUB, STUDY, PROJECT, ACTIVITY, OTHER)
             tag: 태그 필터
             
         Returns:
@@ -184,6 +186,10 @@ class StoryService:
         # 상태 필터
         if status_filter == "recruiting":
             query = query.filter(Story.recruitment_status == RecruitmentStatus.RECRUITING)
+        
+        # 모집 타입 필터
+        if recruitment_type:
+            query = query.filter(Story.recruitment_type == RecruitmentType(recruitment_type))
         
         # 태그 필터
         if tag:
