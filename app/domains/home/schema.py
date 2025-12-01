@@ -45,6 +45,7 @@ class RecentQuestionItem(BaseModel):
     interest_count: int
     answer_count: int
     view_count: int
+    is_accepted: bool  # 채택 여부
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

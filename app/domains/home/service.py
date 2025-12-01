@@ -276,6 +276,7 @@ class HomeService:
             interest_count=question.interest_count,
             answer_count=question.answer_count,
             view_count=question.view_count,
+            is_accepted=question.accepted_answer_id is not None,
             created_at=question.created_at
         )
 
