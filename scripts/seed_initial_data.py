@@ -4,6 +4,7 @@
 - 허용된 이메일 도메인
 - 전공 데이터
 - 관심사 데이터
+- QnA 카테고리 데이터
 """
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from app.domains.auth.model import AllowedEmailDomain
 from app.domains.majors.model import Major
 from app.domains.users.model import User
 from app.domains.interests.model import Interest  # 모델 관계를 위해 필요
+from app.domains.qna.model import Category  # QnA 카테고리
 
 
 def seed_allowed_domains(db):
@@ -201,6 +203,52 @@ def seed_interests(db):
     return added_count, skipped_count
 
 
+def seed_qna_categories(db):
+    """QnA 카테고리 데이터 시딩"""
+    print("📂 QnA 카테고리 데이터 시딩 중...")
+    
+    # 기본 카테고리 목록
+    default_categories = [
+        {"name": "학교생활", "display_order": 1},
+        {"name": "전공/학업", "display_order": 2},
+        {"name": "진로/취업", "display_order": 3},
+        {"name": "인간관계", "display_order": 4},
+        {"name": "기타", "display_order": 5},
+    ]
+    
+    added_count = 0
+    skipped_count = 0
+    
+    for cat_data in default_categories:
+        # 이미 존재하는지 확인
+        existing = db.query(Category).filter(
+            Category.name == cat_data["name"]
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # 새 카테고리 추가
+        new_category = Category(
+            name=cat_data["name"],
+            display_order=cat_data["display_order"],
+            is_active=True
+        )
+        db.add(new_category)
+        added_count += 1
+    
+    # 커밋
+    if added_count > 0:
+        db.commit()
+        print(f"   ✅ {added_count}개 카테고리 추가됨")
+    
+    if skipped_count > 0:
+        print(f"   ⏭️  {skipped_count}개 카테고리 이미 존재")
+    
+    return added_count, skipped_count
+
+
 def seed_all():
     """모든 초기 데이터 삽입"""
     print("="*60)
@@ -228,6 +276,11 @@ def seed_all():
         
         # 3. 관심사 데이터
         added, skipped = seed_interests(db)
+        total_added += added
+        total_skipped += skipped
+        
+        # 4. QnA 카테고리 데이터
+        added, skipped = seed_qna_categories(db)
         total_added += added
         total_skipped += skipped
         
