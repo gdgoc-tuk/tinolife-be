@@ -3,7 +3,7 @@
 """
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from datetime import datetime, timezone
 
 from app.domains.tinostory.model import (
@@ -160,7 +160,7 @@ class StoryService:
         sort_by: str = "recent",
         status_filter: Optional[str] = "recruiting",
         recruitment_type: Optional[str] = None,
-        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
     ) -> tuple[List[Story], int]:
         """
         스토리 목록 조회
@@ -172,7 +172,7 @@ class StoryService:
             sort_by: 정렬 기준 (recent, deadline, popular)
             status_filter: 상태 필터 (recruiting, all)
             recruitment_type: 모집 타입 필터 (CLUB, STUDY, PROJECT, ACTIVITY, OTHER)
-            tag: 태그 필터
+            tags: 태그 필터 리스트 (OR 조건)
             
         Returns:
             (스토리 목록, 총 개수)
@@ -191,11 +191,10 @@ class StoryService:
         if recruitment_type:
             query = query.filter(Story.recruitment_type == RecruitmentType(recruitment_type))
         
-        # 태그 필터
-        if tag:
-            query = query.join(Story.tags).filter(
-                func.lower(Tag.name) == func.lower(tag)
-            )
+        # 태그 필터 (OR 조건)
+        if tags:
+            tag_conditions = [func.lower(Tag.name) == func.lower(t) for t in tags]
+            query = query.join(Story.tags).filter(or_(*tag_conditions))
         
         # 정렬
         if sort_by == "deadline":

@@ -1,6 +1,7 @@
 """
 티노스토리 API 라우터
 """
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Query, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
@@ -93,7 +94,7 @@ async def get_stories(
     sort_by: str = Query("recent", pattern="^(recent|deadline|popular)$", description="정렬 기준"),
     status_filter: str = Query("recruiting", pattern="^(recruiting|all)$", description="상태 필터"),
     recruitment_type: str = Query(None, pattern="^(CLUB|STUDY|PROJECT|ACTIVITY|OTHER)$", description="모집 타입 필터"),
-    tag: str = Query(None, description="태그 필터"),
+    tags: Optional[List[str]] = Query(None, description="태그 필터 (여러 개 가능, OR 조건)"),
     db: Session = Depends(get_db),
     service: StoryService = Depends(get_story_service),
 ):
@@ -105,11 +106,11 @@ async def get_stories(
     - **sort_by**: 정렬 기준 (recent: 최신순, deadline: 마감 임박순, popular: 인기순)
     - **status_filter**: 상태 필터 (recruiting: 모집중만, all: 전체)
     - **recruitment_type**: 모집 타입 필터 (CLUB: 동아리, STUDY: 스터디, PROJECT: 프로젝트, ACTIVITY: 대외활동, OTHER: 기타)
-    - **tag**: 태그 필터
+    - **tags**: 태그 필터 (여러 개 가능, OR 조건으로 검색)
     """
     stories, total = await service.get_stories(
         db, skip=skip, limit=limit, sort_by=sort_by, status_filter=status_filter, 
-        recruitment_type=recruitment_type, tag=tag
+        recruitment_type=recruitment_type, tags=tags
     )
     
     story_items = [_build_story_list_item(story) for story in stories]

@@ -1134,8 +1134,8 @@ class TestTinoStoryBasicFlow:
             headers=auth_headers_tino_user
         )
 
-        # 태그로 필터링
-        response = client.get("/tinostory?tag=동아리")
+        # 태그로 필터링 (단일 태그)
+        response = client.get("/tinostory?tags=동아리")
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["total"] >= 1
@@ -1143,6 +1143,50 @@ class TestTinoStoryBasicFlow:
         for story in data["stories"]:
             tag_names = [t["name"] for t in story["tags"]]
             assert "동아리" in tag_names
+
+    def test_get_story_list_filter_by_multiple_tags(
+        self, client, auth_headers_tino_user
+    ):
+        """STORY-005-3: 여러 태그로 필터링 (OR 조건)"""
+        deadline = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        
+        # 태그1 스토리
+        client.post(
+            "/tinostory",
+            json={
+                "title": "Python 스터디",
+                "content": "파이썬 공부해요",
+                "recruitment_type": "STUDY",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/python",
+                "tag_names": ["python"]
+            },
+            headers=auth_headers_tino_user
+        )
+        
+        # 태그2 스토리
+        client.post(
+            "/tinostory",
+            json={
+                "title": "FastAPI 프로젝트",
+                "content": "FastAPI 개발해요",
+                "recruitment_type": "PROJECT",
+                "deadline": deadline,
+                "open_chat_link": "https://open.kakao.com/fastapi",
+                "tag_names": ["fastapi"]
+            },
+            headers=auth_headers_tino_user
+        )
+
+        # 여러 태그로 OR 필터링
+        response = client.get("/tinostory?tags=python&tags=fastapi")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 2
+        # OR 조건이므로 python 또는 fastapi 태그가 있어야 함
+        for story in data["stories"]:
+            tag_names = [t["name"].lower() for t in story["tags"]]
+            assert "python" in tag_names or "fastapi" in tag_names
 
     def test_get_story_list_filter_by_recruitment_type(
         self, client, auth_headers_tino_user
